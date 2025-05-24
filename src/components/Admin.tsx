@@ -132,7 +132,6 @@ const Admin: React.FC = () => {
       solicitud,
     });
   };
-
   const confirmarCambioEstatus = () => {
     if (!confirmacion.solicitud || confirmacion.idx === null) {
       setConfirmacion({ open: false, idx: null, nuevoEstatus: '', solicitud: null });
@@ -140,20 +139,34 @@ const Admin: React.FC = () => {
     }
     const solicitud = confirmacion.solicitud;
     const nuevoEstatus = confirmacion.nuevoEstatus;
+    
+    // Primero actualizamos localmente
     const actualizadas = solicitudes.map(s =>
       s === solicitud ? { ...s, estatusConfirmacion: nuevoEstatus } : s
     );
     setSolicitudes(actualizadas);
 
-    // Actualizar en backend
-    fetch(`http://localhost:3000/api/EditarEstatus`, {
+    // Actualizar en backend - Asegurarnos que se envíe el nuevo estatus correctamente
+    const solicitudActualizada = { ...solicitud, estatusConfirmacion: nuevoEstatus };
+    
+    fetch(`http://localhost:3000/api/editar-estatus`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        id: solicitud.id || solicitud.numeroEmpleado, // Ajusta según tu backend
+        id: solicitud.id || solicitud.numeroEmpleado,
         estatusConfirmacion: nuevoEstatus,
-        ...solicitud
+        solicitud: solicitudActualizada
       }),
+    })
+    .then(response => {
+      if (!response.ok) {
+        console.error('Error al actualizar el estatus', response.statusText);
+        // Podríamos revertir el cambio local si hay error
+      }
+      return response.json();
+    })
+    .catch(error => {
+      console.error('Error en la petición:', error);
     });
 
     setConfirmacion({ open: false, idx: null, nuevoEstatus: '', solicitud: null });
