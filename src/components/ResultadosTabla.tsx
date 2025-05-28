@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import apiConfig from '../config/apiConfig'; // Importa la configuración de la API
+import apiConfig from '../config/apiConfig.json'; // Import the local JSON file directly
 
 interface ResultadosTablaProps {
   data?: any[];
@@ -18,19 +18,20 @@ const ResultadosTabla: React.FC<ResultadosTablaProps> = ({
 }) => {
   const [data, setData] = useState<any[]>(propData || []);
   const [pagina, setPagina] = useState(1);
+  const baseURL = apiConfig.baseURL; // Use the baseURL directly from the imported JSON
   const porPagina = 10;
 
   useEffect(() => {
-    if (!propData) {
-      fetch(`${apiConfig.baseURL}/api/resultados`) // Usa la URL base desde la configuración
+    if (!propData && baseURL) {
+      fetch(`${baseURL}/api/resultados`) // Use the baseURL from apiConfig
         .then(res => res.json())
-        .then(apiData => setData(apiData || []));
+        .then(apiData => setData(apiData || []))
+        .catch(error => console.error('Error al cargar resultados:', error));
     } else {
-      setData(propData);
+      setData(propData || []);
     }
     setPagina(1);
-  }, [propData]);
-
+  }, [propData, baseURL]);
 
   // Filtrado por número de empleado si está activo (desde prop)
   const dataFiltrada = numeroEmpleado

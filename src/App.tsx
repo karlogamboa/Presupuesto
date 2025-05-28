@@ -1,56 +1,20 @@
 import { useState, useEffect } from 'react';
 import SolicitudGastoForm from './components/SolicitudGastoForm';
 import ResultadosTabla from './components/ResultadosTabla';
-import apiConfig from './config/apiConfig'; // Importa la configuración de la API
+import apiConfig from './config/apiConfig.json'; // Import the local JSON file directly
 import './App.css';
-
-// function limpiarEspacios(obj: any) {
-//   const nuevo: any = {};
-//   Object.keys(obj).forEach(k => {
-//     const key = k.trim();
-//     let val = obj[k];
-//     if (typeof val === 'string') val = val.trim();
-//     nuevo[key] = val;
-//   });
-//   return nuevo;
-// }
 
 function App() {
   const [resultados, setResultados] = useState<any[]>([]);
   const [solicitanteSeleccionado, setSolicitanteSeleccionado] = useState<string>('');
   const [filtroEstatus, setFiltroEstatus] = useState<string>('Todos');
   const [numeroEmpleadoFiltro, setNumeroEmpleadoFiltro] = useState<string>('');
-  // const [datosSolicitante, setDatosSolicitante] = useState<any>(null);
   const [errorMessages, setErrorMessages] = useState<{ id: number; text: string }[]>([]);
-  // const [errorId, setErrorId] = useState(0);
-
-  // Utilidad para mostrar un mensaje de error
-  // const showError = (text: string) => {
-  //   setErrorMessages(prev => {
-  //     const id = errorId + 1;
-  //     setErrorId(id);
-  //     return [...prev, { id, text }];
-  //   });
-  // };
-
-  // Eliminar mensaje por id
-  const removeError = (id: number) => {
-    setErrorMessages(prev => prev.filter(msg => msg.id !== id));
-  };
+  const baseURL = apiConfig.baseURL; // Use the baseURL directly from the imported JSON
 
   useEffect(() => {
-    if (errorMessages.length > 0) {
-      const timers = errorMessages.map(msg =>
-        setTimeout(() => removeError(msg.id), 8000)
-      );
-      return () => timers.forEach(timer => clearTimeout(timer));
-    }
-  }, [errorMessages]);
-
-  // --- DESCOMENTA Y USA ESTE EFFECT PARA QUE SE HAGA LA LLAMADA AUTOMÁTICA ---
-  useEffect(() => {
-    if (numeroEmpleadoFiltro) {
-      fetch(`${apiConfig.baseURL}/api/resultados?numeroEmpleado=${encodeURIComponent(numeroEmpleadoFiltro)}`) // Usa la URL base desde la configuración
+    if (numeroEmpleadoFiltro && baseURL) {
+      fetch(`${baseURL}/api/resultados?numeroEmpleado=${encodeURIComponent(numeroEmpleadoFiltro)}`)
         .then(res => res.json())
         .then(data => setResultados(data || []))
         .catch(() => {
@@ -63,8 +27,7 @@ function App() {
     } else {
       setResultados([]);
     }
-  }, [numeroEmpleadoFiltro]);
-  // --------------------------------------------------------------------------
+  }, [numeroEmpleadoFiltro, baseURL]);
 
   const handleFormSubmit = (data: any) => {
     setResultados(prev => [
@@ -87,6 +50,11 @@ function App() {
       )
     );
   };
+
+  // Remove error message by id
+  function removeError(id: number): void {
+    setErrorMessages(prev => prev.filter(msg => msg.id !== id));
+  }
 
   // Filtrar por solicitante seleccionado y estatus
   const resultadosFiltrados = resultados

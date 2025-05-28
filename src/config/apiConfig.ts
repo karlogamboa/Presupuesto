@@ -1,5 +1,7 @@
-const apiConfig = {
-  baseURL: 'http://192.168.1.100:3000', // Cambia esta dirección según tu configuración
+const loadApiConfig = async () => {
+  const response = await fetch('/apiConfig.json'); // Asegúrate de que el archivo esté en el directorio `dist` o `public`
+  const config = await response.json();
+  return config;
 };
 
-export default apiConfig;
+export default loadApiConfig;

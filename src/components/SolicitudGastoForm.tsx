@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import apiConfig from '../config/apiConfig'; // Importa la configuración de la API
+import apiConfig from '../config/apiConfig.json'; // Import the local JSON file directly
 
 interface Option {
   value: string;
@@ -48,68 +48,58 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
   const [categoriasFiltradas, setCategoriasFiltradas] = useState<Option[]>([]);
   const [selectedProvider, setSelectedProvider] = useState<Option | null>(null);
   const [filtrarPorCategoria, setFiltrarPorCategoria] = useState<boolean>(true);
-  // Cambia NodeJS.Timeout por ReturnType<typeof setTimeout> para compatibilidad con browser/TS
   const [errorPopups, setErrorPopups] = useState<{ id: number; message: string }[]>([]);
   const errorTimeoutsRef = useRef<{ [id: number]: ReturnType<typeof setTimeout> }>({});
   const nextErrorId = useRef(1);
 
-  // Función para debugging
-  const logApiResponse = (endpoint: string, data: any) => {
-    console.log(`Respuesta de API ${endpoint}:`, data);
-    // Mostrar las claves disponibles en el objeto
-    console.log(`Claves disponibles en el objeto:`, Object.keys(data));
-  };
+  const baseURL = apiConfig.baseURL; // Use the baseURL directly from the imported JSON
 
   useEffect(() => {
-    fetch(`${apiConfig.baseURL}/api/departamentos`) // Usa la URL base desde la configuración
-      .then(res => res.json())
-      .then((data: any[]) => {
-        logApiResponse('departamentos', data);
-        setDepartamentosData(data || []);
-        // Procesar los departamentos, extrayendo correctamente el nombre
-        setDepartamentos(
-          (data || []).map(dep => {
-            // El nombre del departamento puede venir en diferentes formatos
-            let nombreDep = dep.departamento || dep.Departamento || dep.Area || dep.area || '';
-            // Si el departamento tiene formato "DEPTO : CÓDIGO-SUBDEPTO", extraer solo el DEPTO
-            if (nombreDep.includes(' : ')) {
-              nombreDep = nombreDep.split(' : ')[0].trim();
-            }
-            return {
-              value: String(nombreDep),
-              label: nombreDep
-            };
-          })
-        );
-      })
-      .catch(error => {
-        console.error("Error al cargar departamentos:", error);
-      });
-    fetch(`${apiConfig.baseURL}/api/categorias-gasto`) // Usa la URL base desde la configuración
-      .then(res => res.json())
-      .then(data => {
-        logApiResponse('categorias-gasto', data);
-        const categoriasData = (data || []).map((d: any) => ({
-          value: String(d.categoriaGasto || d.Nombre || d.nombre),
-          label: d.categoriaGasto || d.Nombre || d.nombre,
-          cuentaGastos: d.cuentaGastos || d.Cuenta || d.cuenta || ''
-        }));
-        setCategorias(categoriasData);
-      });
-    fetch(`${apiConfig.baseURL}/api/proveedores`) // Usa la URL base desde la configuración
-      .then(res => res.json())
-      .then((data: any[]) => {
-        logApiResponse('proveedores', data);
-        const lista = (data || []).map((d: any) => ({
-          value: String((d.nombre || d.Nombre || d.proveedor || '').trim()),
-          label: (d.nombre || d.Nombre || d.proveedor || '').trim(),
-          numeroEmpleado: d.numeroEmpleado || d.NumeroEmpleado || '',
-          cuentaGastos: d.cuentaGastos || d.CuentaGastos || d.cuenta || '',
-          categoriaGasto: d.categoriaGasto || d.CategoriaGasto || d.categoria || d['Categoría'] || ''
-        }));
-        setProveedores(lista);
-      });
-  }, []);
+    if (baseURL) {
+      fetch(`${baseURL}/api/departamentos`)
+        .then(res => res.json())
+        .then((data: any[]) => {
+          setDepartamentosData(data || []);
+          setDepartamentos(
+            (data || []).map(dep => {
+              let nombreDep = dep.departamento || dep.Departamento || dep.Area || dep.area || '';
+              if (nombreDep.includes(' : ')) {
+                nombreDep = nombreDep.split(' : ')[0].trim();
+              }
+              return {
+                value: String(nombreDep),
+                label: nombreDep
+              };
+            })
+          );
+        })
+        .catch(error => {
+          console.error("Error al cargar departamentos:", error);
+        });
+      fetch(`${baseURL}/api/categorias-gasto`)
+        .then(res => res.json())
+        .then(data => {
+          const categoriasData = (data || []).map((d: any) => ({
+            value: String(d.categoriaGasto || d.Nombre || d.nombre),
+            label: d.categoriaGasto || d.Nombre || d.nombre,
+            cuentaGastos: d.cuentaGastos || d.Cuenta || d.cuenta || ''
+          }));
+          setCategorias(categoriasData);
+        });
+      fetch(`${baseURL}/api/proveedores`)
+        .then(res => res.json())
+        .then((data: any[]) => {
+          const lista = (data || []).map((d: any) => ({
+            value: String((d.nombre || d.Nombre || d.proveedor || '').trim()),
+            label: (d.nombre || d.Nombre || d.proveedor || '').trim(),
+            numeroEmpleado: d.numeroEmpleado || d.NumeroEmpleado || '',
+            cuentaGastos: d.cuentaGastos || d.CuentaGastos || d.cuenta || '',
+            categoriaGasto: d.categoriaGasto || d.CategoriaGasto || d.categoria || d['Categoría'] || ''
+          }));
+          setProveedores(lista);
+        });
+    }
+  }, [baseURL]);
   useEffect(() => {
     if (form.departamento) {
       console.log("Buscando subdepartamentos para:", form.departamento);
@@ -225,6 +215,11 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
     }
   }, [selectedProvider, categorias, filtrarPorCategoria]);
 
+  // Function for debugging API responses
+  const logApiResponse = (endpoint: string, data: any) => {
+    console.log(`API Response from ${endpoint}:`, data);
+  };
+
   const handleNumeroEmpleadoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setForm(f => ({
@@ -239,11 +234,10 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
     if (numEmpleadoTimeout) clearTimeout(numEmpleadoTimeout);
     const timeout = setTimeout(() => {
       if (value.trim()) {
-        fetch(`${apiConfig.baseURL}/api/solicitante?numEmpleado=${encodeURIComponent(value.trim())}`) // Usa la URL base desde la configuración
+        fetch(`${baseURL}/api/solicitante?numEmpleado=${encodeURIComponent(value.trim())}`)
           .then(res => res.json())
           .then((data: any) => {
-            logApiResponse('solicitante', data);
-            
+            logApiResponse('solicitante', data); // Use the logApiResponse function
             // Extraer nombre del solicitante
             const nombre = data?.Nombre || data?.nombre || '';
             
@@ -460,7 +454,7 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
     };
 
     try {
-      const response = await fetch(`${apiConfig.baseURL}/api/guardar-presupuesto`, { // Usa la URL base desde la configuración
+      const response = await fetch(`${baseURL}/api/guardar-presupuesto`, { // Usa la URL base desde la configuración
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

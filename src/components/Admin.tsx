@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import apiConfig from '../config/apiConfig'; // Importa la configuración de la API
+import apiConfig from '../config/apiConfig.json'; // Import the local JSON file directly
 
 interface Solicitud {
   [key: string]: any;
@@ -21,6 +21,7 @@ const estatusOpciones = ['Pendiente', 'Confirmado', 'Rechazado'];
 
 const Admin: React.FC = () => {
   const [solicitudes, setSolicitudes] = useState<Solicitud[]>([]);
+  const baseURL = apiConfig.baseURL; // Use the baseURL directly from the imported JSON
   const [campoFiltro, setCampoFiltro] = useState<string>('solicitante');
   const [valorFiltro, setValorFiltro] = useState<string>('');
   const [filtroEstatus, setFiltroEstatus] = useState<string>(''); // Filtro separado para estatus
@@ -33,10 +34,14 @@ const Admin: React.FC = () => {
   }>({ open: false, idx: null, nuevoEstatus: '', solicitud: null });
 
   useEffect(() => {
-    fetch(`${apiConfig.baseURL}/api/resultados`) // Usa la URL base desde la configuración
-      .then(res => res.json())
-      .then(data => setSolicitudes(data || []));
-  }, []);
+    if (baseURL) {
+      fetch(`${baseURL}/api/resultados`) // Use the baseURL from apiConfig
+        .then(res => res.json())
+        .then(data => setSolicitudes(data || []))
+        .catch(error => console.error('Error al cargar resultados:', error));
+    }
+  }, [baseURL]);
+
   const handleFiltroChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     if (e.target.name === 'campoFiltro') setCampoFiltro(e.target.value);
     else setValorFiltro(e.target.value);
@@ -150,24 +155,26 @@ const Admin: React.FC = () => {
     // Actualizar en backend - Asegurarnos que se envíe el nuevo estatus correctamente
     const solicitudActualizada = { ...solicitud, estatusConfirmacion: nuevoEstatus };
     
-    fetch(`${apiConfig.baseURL}/api/editar-estatus`, { // Usa la URL base desde la configuración
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id: solicitud.id || solicitud.numeroEmpleado,
-        estatusConfirmacion: nuevoEstatus,
-        solicitud: solicitudActualizada
-      }),
-    })
-    .then(response => {
-      if (!response.ok) {
-        console.error('Error al actualizar el estatus', response.statusText);
-      }
-      return response.json();
-    })
-    .catch(error => {
-      console.error('Error en la petición:', error);
-    });
+    if (baseURL) {
+      fetch(`${baseURL}/api/editar-estatus`, { // Use the baseURL from apiConfig
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: solicitud.id || solicitud.numeroEmpleado,
+          estatusConfirmacion: nuevoEstatus,
+          solicitud: solicitudActualizada
+        }),
+      })
+      .then(response => {
+        if (!response.ok) {
+          console.error('Error al actualizar el estatus', response.statusText);
+        }
+        return response.json();
+      })
+      .catch(error => {
+        console.error('Error en la petición:', error);
+      });
+    }
 
     setConfirmacion({ open: false, idx: null, nuevoEstatus: '', solicitud: null });
   };
