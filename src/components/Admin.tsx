@@ -176,8 +176,28 @@ const Admin: React.FC = () => {
     setConfirmacion({ open: false, idx: null, nuevoEstatus: '', solicitud: null });
   };
 
+  // Detectar tema (light/dark) desde el body
+  const [theme, setTheme] = useState<'dark' | 'light'>(
+    typeof window !== 'undefined' && document.body.classList.contains('dark') ? 'dark' : 'light'
+  );
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setTheme(document.body.classList.contains('dark') ? 'dark' : 'light');
+    });
+    observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <div style={{ maxWidth: 1100, margin: '2rem auto', padding: 24, position: 'relative' }}>
+    <div style={{
+      maxWidth: 1100,
+      margin: '2rem auto',
+      padding: 24,
+      position: 'relative',
+      background: theme === 'dark' ? '#232323' : '#fff',
+      color: theme === 'dark' ? '#f3f3f3' : '#111',
+      borderRadius: 18
+    }}>
       {/* Confirmación modal */}
       {confirmacion.open && (
         <div style={{
@@ -342,16 +362,19 @@ const Admin: React.FC = () => {
           Buscar por Campo
         </h3>
         <div style={{ display: 'flex', gap: 12 }}>
-          <select 
-            name="campoFiltro" 
-            value={campoFiltro} 
+          <select
+            name="campoFiltro"
+            value={campoFiltro}
             onChange={handleFiltroChange}
-            style={{ 
-              padding: 8, 
-              borderRadius: 6, 
-              border: '1px solid #cfd8dc',
-              minWidth: 150
+            style={{
+              padding: 8,
+              borderRadius: 6,
+              border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc',
+              minWidth: 150,
+              color: theme === 'dark' ? '#f3f3f3' : '#111',
+              background: theme === 'dark' ? '#333' : '#fff'
             }}
+            className={theme === 'dark' ? 'select-dark-placeholder' : 'select-light-placeholder'}
           >
             {camposFiltro.filter(c => c.value !== 'estatusConfirmacion').map(c => (
               <option key={c.value} value={c.value}>{c.label}</option>
@@ -362,12 +385,15 @@ const Admin: React.FC = () => {
             value={valorFiltro}
             onChange={handleFiltroChange}
             placeholder="Buscar..."
-            style={{ 
-              flex: 1, 
-              padding: 8, 
-              borderRadius: 6, 
-              border: '1px solid #cfd8dc' 
+            style={{
+              flex: 1,
+              padding: 8,
+              borderRadius: 6,
+              border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc',
+              color: theme === 'dark' ? '#f3f3f3' : '#111',
+              background: theme === 'dark' ? '#333' : '#fff'
             }}
+            className={theme === 'dark' ? 'input-dark-placeholder' : 'input-light-placeholder'}
             onKeyDown={e => { if (e.key === 'Enter') agregarFiltro(); }}
           />
           <button
@@ -394,9 +420,9 @@ const Admin: React.FC = () => {
               style={{
                 padding: '8px 12px',
                 borderRadius: 6,
-                border: '1px solid #cfd8dc',
-                background: '#f5f5f5',
-                color: '#666',
+                border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc',
+                background: theme === 'dark' ? '#333' : '#f5f5f5',
+                color: theme === 'dark' ? '#f3f3f3' : '#666',
                 cursor: 'pointer',
                 fontSize: 14
               }}
@@ -592,14 +618,15 @@ const Admin: React.FC = () => {
             style={{
               padding: '6px 14px',
               borderRadius: 6,
-              border: '1px solid #bdbdbd',
-              background: pagina === 1 ? '#eee' : '#fff',
-              cursor: pagina === 1 ? 'not-allowed' : 'pointer'
+              border: theme === 'dark' ? '1px solid #444' : '1px solid #bdbdbd',
+              background: pagina === 1 ? (theme === 'dark' ? '#444' : '#eee') : (theme === 'dark' ? '#333' : '#fff'),
+              cursor: pagina === 1 ? 'not-allowed' : 'pointer',
+              color: theme === 'dark' ? '#f3f3f3' : '#111'
             }}
           >
             Anterior
           </button>
-          <span style={{ alignSelf: 'center', fontWeight: 500 }}>
+          <span style={{ alignSelf: 'center', fontWeight: 500, color: theme === 'dark' ? '#f3f3f3' : '#111' }}>
             Página {pagina} de {totalPaginas}
           </span>
           <button
@@ -608,9 +635,10 @@ const Admin: React.FC = () => {
             style={{
               padding: '6px 14px',
               borderRadius: 6,
-              border: '1px solid #bdbdbd',
-              background: pagina === totalPaginas ? '#eee' : '#fff',
-              cursor: pagina === totalPaginas ? 'not-allowed' : 'pointer'
+              border: theme === 'dark' ? '1px solid #444' : '1px solid #bdbdbd',
+              background: pagina === totalPaginas ? (theme === 'dark' ? '#444' : '#eee') : (theme === 'dark' ? '#333' : '#fff'),
+              cursor: pagina === totalPaginas ? 'not-allowed' : 'pointer',
+              color: theme === 'dark' ? '#f3f3f3' : '#111'
             }}
           >
             Siguiente

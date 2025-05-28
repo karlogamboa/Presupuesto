@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 
 interface Option {
   value: string;
@@ -47,6 +47,10 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
   const [categoriasFiltradas, setCategoriasFiltradas] = useState<Option[]>([]);
   const [selectedProvider, setSelectedProvider] = useState<Option | null>(null);
   const [filtrarPorCategoria, setFiltrarPorCategoria] = useState<boolean>(true);
+  // Cambia NodeJS.Timeout por ReturnType<typeof setTimeout> para compatibilidad con browser/TS
+  const [errorPopups, setErrorPopups] = useState<{ id: number; message: string }[]>([]);
+  const errorTimeoutsRef = useRef<{ [id: number]: ReturnType<typeof setTimeout> }>({});
+  const nextErrorId = useRef(1);
 
   // Función para debugging
   const logApiResponse = (endpoint: string, data: any) => {
@@ -417,6 +421,24 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
     setForm(f => ({ ...f, proveedor: '', categoriaGasto: '', cuentaGastos: '' }));
   };
 
+  const showErrorPopup = (message: string) => {
+    const id = nextErrorId.current++;
+    setErrorPopups(prev => [...prev, { id, message }]);
+    const timeout = setTimeout(() => {
+      setErrorPopups(prev => prev.filter(p => p.id !== id));
+      delete errorTimeoutsRef.current[id];
+    }, 8000);
+    errorTimeoutsRef.current[id] = timeout;
+  };
+
+  const closeErrorPopup = (id: number) => {
+    setErrorPopups(prev => prev.filter(p => p.id !== id));
+    if (errorTimeoutsRef.current[id]) {
+      clearTimeout(errorTimeoutsRef.current[id]);
+      delete errorTimeoutsRef.current[id];
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const payload = {
@@ -437,220 +459,476 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
     };
 
     try {
-      await fetch('http://localhost:3000/api/guardar-presupuesto', {
+      const response = await fetch('http://localhost:3000/api/guardar-presupuesto', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-    } catch (error) {
-      console.error('Error al guardar el resultado en el Excel:', error);
+      let data: any = {};
+      try {
+        data = await response.clone().json();
+      } catch {
+        try {
+          data = { error: await response.text() };
+        } catch {
+          data = {};
+        }
+      }
+      if (!response.ok || (data && data.error)) {
+        showErrorPopup(
+          data && data.error
+            ? `Error del servidor: ${data.error}`
+            : 'Error al guardar el presupuesto: ' + response.statusText
+        );
+        return;
+      }
+    } catch (error: any) {
+      showErrorPopup('Error en la petición: ' + (error?.message || error));
+      return;
     }
     onSubmit(form);
   };
 
+  // Detectar tema (light/dark) desde el body
+  const [theme, setTheme] = useState<'dark' | 'light'>(
+    typeof window !== 'undefined' && document.body.classList.contains('dark') ? 'dark' : 'light'
+  );
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setTheme(document.body.classList.contains('dark') ? 'dark' : 'light');
+    });
+    observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <form
-      className="solicitud-gasto-form"
-      onSubmit={handleSubmit}
-      style={{
-        maxWidth: 700,
-        margin: '2rem auto',
-        padding: 32,
-        borderRadius: 16,
-        background: '#fff',
-        boxShadow: '0 4px 24px #0002',
+    <>
+      {/* Popups de error apilados */}
+      <div style={{
+        position: 'fixed',
+        top: 24,
+        right: 24,
+        zIndex: 3000,
         display: 'flex',
         flexDirection: 'column',
-        gap: 24
-      }}
-    >
-      <h2 style={{ textAlign: 'center', marginBottom: 0, letterSpacing: 1, color: '#1976d2' }}>
-        Solicitud de Presupuesto
-      </h2>
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr 1fr',
-          gap: 24,
-          alignItems: 'center'
-        }}
-      >
-        <div className="form-group" style={{ gridColumn: '1 / 2' }}>
-          <label style={{ fontWeight: 500, marginBottom: 6, display: 'block', textAlign: 'left' }}>Número de Empleado:</label>
-          <input
-            name="numeroEmpleado"
-            value={form.numeroEmpleado}
-            onChange={handleChange}
-            required
-            style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #cfd8dc' }}
-          />
-        </div>
-        <div className="form-group" style={{ gridColumn: '2 / 3' }}>
-          <label style={{ fontWeight: 500, marginBottom: 6, display: 'block', textAlign: 'left' }}>Nombre del Solicitante:</label>
-          <input
-            name="solicitante"
-            value={form.solicitante}
-            readOnly
-            style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #cfd8dc', background: '#f7fafd' }}
-          />
-        </div>
-        <div className="form-group" style={{ gridColumn: '3 / 4' }}>
-          <label style={{ fontWeight: 500, marginBottom: 6, display: 'block', textAlign: 'left' }}>Correo:</label>
-          <input
-            name="correo"
-            value={form.correo}
-            readOnly
-            style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #cfd8dc', background: '#f7fafd' }}
-          />
-        </div>
-        <div className="form-group" style={{ gridColumn: '1 / 2' }}>
-          <label style={{ fontWeight: 500, marginBottom: 6, display: 'block', textAlign: 'left' }}>Departamento:</label>
-          <select name="departamento" value={form.departamento} onChange={handleChange} required style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #cfd8dc' }}>
-            <option value="">Seleccione</option>
-            {departamentos.map((opt, idx) => (
-              <option key={opt.value + '-' + idx} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-        </div>
-        <div className="form-group" style={{ gridColumn: '2 / 3' }}>
-          <label style={{ fontWeight: 500, marginBottom: 6, display: 'block', textAlign: 'left' }}>Sub-Departamento:</label>
-          <select
-            name="subDepartamento"
-            value={form.subDepartamento}
-            onChange={handleChange}
-            required
-            style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #cfd8dc' }}
+        alignItems: 'flex-end',
+        gap: 12,
+        pointerEvents: 'none'
+      }}>
+        {errorPopups.map((popup) => (
+          <div
+            key={popup.id}
+            style={{
+              background: '#e57373',
+              color: '#fff',
+              padding: '18px 48px 18px 24px',
+              borderRadius: 10,
+              boxShadow: '0 2px 12px #0003',
+              minWidth: 260,
+              maxWidth: 380,
+              fontWeight: 600,
+              fontSize: 15,
+              display: 'flex',
+              alignItems: 'center',
+              position: 'relative',
+              pointerEvents: 'auto'
+            }}
           >
-            <option value="">Seleccione</option>
-            {subDepartamentos.map((opt, idx) => (
-              <option key={opt.value + '-' + idx} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-        </div>
-        <div className="form-group" style={{ gridColumn: '3 / 4' }}>
-          <label style={{ fontWeight: 500, marginBottom: 6, display: 'block', textAlign: 'left' }}>Centro de Costos:</label>
-          <input name="centroCostos" value={form.centroCostos} readOnly style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #cfd8dc', background: '#f7fafd' }} />
-        </div>
-        <div className="form-group" style={{ gridColumn: '1 / 4', position: 'relative', zIndex: 20 }}>
-          <label style={{ fontWeight: 500, marginBottom: 6, display: 'block', textAlign: 'left' }}>Proveedores:</label>
-          <input
-            type="text"
-            name="proveedorInput"
-            value={proveedorInput}
-            onChange={handleProveedorInput}
-            placeholder="Escriba para buscar proveedor..."
-            autoComplete="off"
-            style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #cfd8dc' }}
-          />          {selectedProvider && selectedProvider.categoriaGasto && (
-            <div style={{ fontSize: '0.85em', color: '#555', margin: '4px 0 0 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div>
-                Categoría del proveedor: <span style={{ fontWeight: 'bold' }}>{selectedProvider.categoriaGasto}</span>
-              </div>
-              <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', marginLeft: 'auto' }}>
-                <input 
-                  type="checkbox" 
-                  checked={filtrarPorCategoria} 
-                  onChange={(e) => setFiltrarPorCategoria(e.target.checked)}
-                  style={{ marginRight: '4px' }}
-                />
-                <span>Filtrar categorías</span>
-              </label>
-            </div>
-          )}
-          {proveedorInput && proveedoresFiltrados.length > 0 && !proveedor && (
-            <div
+            <span style={{ flex: 1 }}>{popup.message}</span>
+            <button
+              onClick={() => closeErrorPopup(popup.id)}
               style={{
                 position: 'absolute',
-                top: 60,
-                left: 0,
-                right: 0,
-                zIndex: 100,
-                background: '#fff',
-                border: '1px solid #cfd8dc',
-                borderRadius: 8,
-                maxHeight: 260,
-                overflowY: 'auto',
-                boxShadow: '0 4px 16px #0002'
+                top: 8,
+                right: 12,
+                background: 'transparent',
+                border: 'none',
+                color: '#fff',
+                fontSize: 20,
+                fontWeight: 700,
+                cursor: 'pointer',
+                lineHeight: 1
               }}
+              aria-label="Cerrar"
             >
-              {proveedoresFiltrados.map((prov, idx) => (
-                <div
-                  key={prov.value + '-' + idx}
-                  onClick={() => {
-                    setSelectedProvider(prov);
-                    setProveedor(prov.value); 
-                    setProveedorInput(prov.label);
-                  }}
-                  style={{
-                    padding: 12,
-                    cursor: 'pointer',
-                    borderBottom: idx < proveedoresFiltrados.length - 1 ? '1px solid #f0f0f0' : 'none',
-                    background: prov.value === proveedor ? '#e3eafc' : '#fff',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 2
-                  }}
-                >
-                  <span style={{ fontWeight: 600, color: '#1976d2', fontSize: 16 }}>{prov.label}</span>
-                  {prov.numeroEmpleado && (
-                    <span style={{ color: '#888', fontSize: 13 }}>Núm. Empleado: {prov.numeroEmpleado}</span>
-                  )}
-                  {prov.categoriaGasto && (
-                    <span style={{ color: '#888', fontSize: 13 }}>Categoría: {prov.categoriaGasto}</span>
-                  )}
-                  {prov.cuentaGastos && (
-                    <span style={{ color: '#888', fontSize: 13 }}>Cuenta Gastos: {prov.cuentaGastos}</span>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="form-group" style={{ gridColumn: '1 / 2' }}>
-          <label style={{ fontWeight: 500, marginBottom: 6, display: 'block', textAlign: 'left' }}>Categoría de Gasto:</label>
-          <select
-            name="categoriaGasto"
-            value={form.categoriaGasto}
-            onChange={handleChange}
-            required={!!proveedor}
-            style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #cfd8dc' }}
-          >
-            <option value="">Seleccione</option>
-            {categoriasFiltradas.map((opt, idx) => (
-              <option key={opt.value + '-' + idx} value={opt.value}>{opt.label}</option>
-            ))}          </select>
-        </div>
-        <div className="form-group" style={{ gridColumn: '2 / 3' }}>
-          <label style={{ fontWeight: 500, marginBottom: 6, display: 'block', textAlign: 'left' }}>Cuenta de Gastos:</label>
-          <input name="cuentaGastos" value={form.cuentaGastos} readOnly style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #cfd8dc', background: '#f7fafd' }} />
-        </div>
-        <div className="form-group" style={{ gridColumn: '3 / 4' }}>
-          <label style={{ fontWeight: 500, marginBottom: 6, display: 'block', textAlign: 'left' }}>
-            Monto Solicitado ( s/IVA)
-          </label>
-          <input name="montoSubtotal" type="number" value={form.montoSubtotal} onChange={handleChange} required min={0} step="0.01" style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #cfd8dc' }} />
-        </div>
+              ×
+            </button>
+          </div>
+        ))}
       </div>
-      <button
-        type="submit"
+      <form
+        className={`solicitud-gasto-form ${theme}`}
+        onSubmit={handleSubmit}
         style={{
-          width: 220,
-          alignSelf: 'center',
-          padding: 14,
-          borderRadius: 8,
-          background: '#1976d2',
-          color: '#fff',
-          fontWeight: 600,
-          border: 'none',
-          fontSize: 18,
-          cursor: 'pointer',
-          letterSpacing: 1,
-          marginTop: 8
+          maxWidth: 700,
+          margin: '2rem auto',
+          padding: 32,
+          borderRadius: 16,
+          background: theme === 'dark' ? '#232323' : '#fff',
+          boxShadow: '0 4px 24px #0002',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 24,
+          color: theme === 'dark' ? '#f3f3f3' : '#111'
         }}
       >
-        Solicitar
-      </button>
-    </form>
+        <h2 style={{
+          textAlign: 'center',
+          marginBottom: 0,
+          letterSpacing: 1,
+          color: theme === 'dark' ? '#90caf9' : '#1976d2'
+        }}>
+          Solicitud de Presupuesto
+        </h2>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr 1fr',
+            gap: 24,
+            alignItems: 'center'
+          }}
+        >
+          <div className="form-group" style={{ gridColumn: '1 / 2' }}>
+            <label style={{
+              fontWeight: 500,
+              marginBottom: 6,
+              display: 'block',
+              textAlign: 'left',
+              color: theme === 'dark' ? '#f3f3f3' : '#111'
+            }}>Número de Empleado:</label>
+            <input
+              name="numeroEmpleado"
+              value={form.numeroEmpleado}
+              onChange={handleChange}
+              required
+              style={{
+                width: '100%',
+                padding: 8,
+                borderRadius: 6,
+                border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc',
+                background: theme === 'dark' ? '#333' : '#fff',
+                color: theme === 'dark' ? '#f3f3f3' : '#111'
+              }}
+              className={theme === 'dark' ? 'input-dark-placeholder' : 'input-light-placeholder'}
+            />
+          </div>
+          <div className="form-group" style={{ gridColumn: '2 / 3' }}>
+            <label style={{
+              fontWeight: 500,
+              marginBottom: 6,
+              display: 'block',
+              textAlign: 'left',
+              color: theme === 'dark' ? '#f3f3f3' : '#111'
+            }}>Nombre del Solicitante:</label>
+            <input
+              name="solicitante"
+              value={form.solicitante}
+              readOnly
+              style={{
+                width: '100%',
+                padding: 8,
+                borderRadius: 6,
+                border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc',
+                background: theme === 'dark' ? '#333' : '#f7fafd',
+                color: theme === 'dark' ? '#f3f3f3' : '#111'
+              }}
+            />
+          </div>
+          <div className="form-group" style={{ gridColumn: '3 / 4' }}>
+            <label style={{
+              fontWeight: 500,
+              marginBottom: 6,
+              display: 'block',
+              textAlign: 'left',
+              color: theme === 'dark' ? '#f3f3f3' : '#111'
+            }}>Correo:</label>
+            <input
+              name="correo"
+              value={form.correo}
+              readOnly
+              style={{
+                width: '100%',
+                padding: 8,
+                borderRadius: 6,
+                border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc',
+                background: theme === 'dark' ? '#333' : '#f7fafd',
+                color: theme === 'dark' ? '#f3f3f3' : '#111'
+              }}
+            />
+          </div>
+          <div className="form-group" style={{ gridColumn: '1 / 2' }}>
+            <label style={{
+              fontWeight: 500,
+              marginBottom: 6,
+              display: 'block',
+              textAlign: 'left',
+              color: theme === 'dark' ? '#f3f3f3' : '#111'
+            }}>Departamento:</label>
+            <select
+              name="departamento"
+              value={form.departamento}
+              onChange={handleChange}
+              required
+              style={{
+                width: '100%',
+                padding: 8,
+                borderRadius: 6,
+                border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc',
+                color: theme === 'dark' ? '#f3f3f3' : '#111',
+                background: theme === 'dark' ? '#333' : '#fff'
+              }}
+              className={theme === 'dark' ? 'select-dark-placeholder' : 'select-light-placeholder'}
+            >
+              <option value="">Seleccione</option>
+              {departamentos.map((opt, idx) => (
+                <option key={opt.value + '-' + idx} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group" style={{ gridColumn: '2 / 3' }}>
+            <label style={{
+              fontWeight: 500,
+              marginBottom: 6,
+              display: 'block',
+              textAlign: 'left',
+              color: theme === 'dark' ? '#f3f3f3' : '#111'
+            }}>Sub-Departamento:</label>
+            <select
+              name="subDepartamento"
+              value={form.subDepartamento}
+              onChange={handleChange}
+              required
+              style={{
+                width: '100%',
+                padding: 8,
+                borderRadius: 6,
+                border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc',
+                color: theme === 'dark' ? '#f3f3f3' : '#111',
+                background: theme === 'dark' ? '#333' : '#fff'
+              }}
+              className={theme === 'dark' ? 'select-dark-placeholder' : 'select-light-placeholder'}
+            >
+              <option value="">Seleccione</option>
+              {subDepartamentos.map((opt, idx) => (
+                <option key={opt.value + '-' + idx} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group" style={{ gridColumn: '3 / 4' }}>
+            <label style={{
+              fontWeight: 500,
+              marginBottom: 6,
+              display: 'block',
+              textAlign: 'left',
+              color: theme === 'dark' ? '#f3f3f3' : '#111'
+            }}>Centro de Costos:</label>
+            <input
+              name="centroCostos"
+              value={form.centroCostos}
+              readOnly
+              style={{
+                width: '100%',
+                padding: 8,
+                borderRadius: 6,
+                border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc',
+                background: theme === 'dark' ? '#333' : '#f7fafd',
+                color: theme === 'dark' ? '#f3f3f3' : '#111'
+              }}
+            />
+          </div>
+          <div className="form-group" style={{ gridColumn: '1 / 4', position: 'relative', zIndex: 20 }}>
+            <label style={{
+              fontWeight: 500,
+              marginBottom: 6,
+              display: 'block',
+              textAlign: 'left',
+              color: theme === 'dark' ? '#f3f3f3' : '#111'
+            }}>Proveedores:</label>
+            <input
+              type="text"
+              name="proveedorInput"
+              value={proveedorInput}
+              onChange={handleProveedorInput}
+              placeholder="Escriba para buscar proveedor..."
+              autoComplete="off"
+              style={{
+                width: '100%',
+                padding: 8,
+                borderRadius: 6,
+                border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc',
+                color: theme === 'dark' ? '#f3f3f3' : '#111',
+                background: theme === 'dark' ? '#333' : '#fff'
+              }}
+              className={theme === 'dark' ? 'input-dark-placeholder' : 'input-light-placeholder'}
+            />
+            {selectedProvider && selectedProvider.categoriaGasto && (
+              <div style={{ fontSize: '0.85em', color: '#555', margin: '4px 0 0 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div>
+                  Categoría del proveedor: <span style={{ fontWeight: 'bold' }}>{selectedProvider.categoriaGasto}</span>
+                </div>
+                <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', marginLeft: 'auto' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={filtrarPorCategoria} 
+                    onChange={(e) => setFiltrarPorCategoria(e.target.checked)}
+                    style={{ marginRight: '4px' }}
+                  />
+                  <span>Filtrar categorías</span>
+                </label>
+              </div>
+            )}
+            {proveedorInput && proveedoresFiltrados.length > 0 && !proveedor && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 60,
+                  left: 0,
+                  right: 0,
+                  zIndex: 100,
+                  background: '#fff',
+                  border: '1px solid #cfd8dc',
+                  borderRadius: 8,
+                  maxHeight: 260,
+                  overflowY: 'auto',
+                  boxShadow: '0 4px 16px #0002'
+                }}
+              >
+                {proveedoresFiltrados.map((prov, idx) => (
+                  <div
+                    key={prov.value + '-' + idx}
+                    onClick={() => {
+                      setSelectedProvider(prov);
+                      setProveedor(prov.value); 
+                      setProveedorInput(prov.label);
+                    }}
+                    style={{
+                      padding: 12,
+                      cursor: 'pointer',
+                      borderBottom: idx < proveedoresFiltrados.length - 1 ? '1px solid #f0f0f0' : 'none',
+                      background: prov.value === proveedor ? '#e3eafc' : '#fff',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 2
+                    }}
+                  >
+                    <span style={{ fontWeight: 600, color: '#1976d2', fontSize: 16 }}>{prov.label}</span>
+                    {prov.numeroEmpleado && (
+                      <span style={{ color: '#888', fontSize: 13 }}>Núm. Empleado: {prov.numeroEmpleado}</span>
+                    )}
+                    {prov.categoriaGasto && (
+                      <span style={{ color: '#888', fontSize: 13 }}>Categoría: {prov.categoriaGasto}</span>
+                    )}
+                    {prov.cuentaGastos && (
+                      <span style={{ color: '#888', fontSize: 13 }}>Cuenta Gastos: {prov.cuentaGastos}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="form-group" style={{ gridColumn: '1 / 2' }}>
+            <label style={{
+              fontWeight: 500,
+              marginBottom: 6,
+              display: 'block',
+              textAlign: 'left',
+              color: theme === 'dark' ? '#f3f3f3' : '#111'
+            }}>Categoría de Gasto:</label>
+            <select
+              name="categoriaGasto"
+              value={form.categoriaGasto}
+              onChange={handleChange}
+              required
+              style={{
+                width: '100%',
+                padding: 8,
+                borderRadius: 6,
+                border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc',
+                color: theme === 'dark' ? '#f3f3f3' : '#111',
+                background: theme === 'dark' ? '#333' : '#fff'
+              }}
+              className={theme === 'dark' ? 'select-dark-placeholder' : 'select-light-placeholder'}
+            >
+              <option value="">Seleccione</option>
+              {categoriasFiltradas.map((opt, idx) => (
+                <option key={opt.value + '-' + idx} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group" style={{ gridColumn: '2 / 3' }}>
+            <label style={{
+              fontWeight: 500,
+              marginBottom: 6,
+              display: 'block',
+              textAlign: 'left',
+              color: theme === 'dark' ? '#f3f3f3' : '#111'
+            }}>Cuenta de Gastos:</label>
+            <input
+              name="cuentaGastos"
+              value={form.cuentaGastos}
+              readOnly
+              required
+              style={{
+                width: '100%',
+                padding: 8,
+                borderRadius: 6,
+                border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc',
+                background: theme === 'dark' ? '#333' : '#f7fafd',
+                color: theme === 'dark' ? '#f3f3f3' : '#111'
+              }}
+            />
+          </div>
+          <div className="form-group" style={{ gridColumn: '3 / 4' }}>
+            <label style={{
+              fontWeight: 500,
+              marginBottom: 6,
+              display: 'block',
+              textAlign: 'left',
+              color: theme === 'dark' ? '#f3f3f3' : '#111'
+            }}>
+              Monto Solicitado ( s/IVA)
+            </label>
+            <input
+              name="montoSubtotal"
+              type="number"
+              value={form.montoSubtotal}
+              onChange={handleChange}
+              required
+              min={0}
+              step="0.01"
+              style={{
+                width: '100%',
+                padding: 8,
+                borderRadius: 6,
+                border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc',
+                background: theme === 'dark' ? '#333' : '#fff',
+                color: theme === 'dark' ? '#f3f3f3' : '#111'
+              }}
+              className={theme === 'dark' ? 'input-dark-placeholder' : 'input-light-placeholder'}
+            />
+          </div>
+        </div>
+        <button
+          type="submit"
+          style={{
+            width: 220,
+            alignSelf: 'center',
+            padding: 14,
+            borderRadius: 8,
+            background: theme === 'dark' ? '#1976d2' : '#1976d2',
+            color: '#fff',
+            fontWeight: 600,
+            border: 'none',
+            fontSize: 18,
+            cursor: 'pointer',
+            letterSpacing: 1,
+            marginTop: 8
+          }}
+        >
+          Solicitar
+        </button>
+      </form>
+    </>
   );
 };
 

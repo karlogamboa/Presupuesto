@@ -3,34 +3,34 @@ import SolicitudGastoForm from './components/SolicitudGastoForm';
 import ResultadosTabla from './components/ResultadosTabla';
 import './App.css';
 
-function limpiarEspacios(obj: any) {
-  const nuevo: any = {};
-  Object.keys(obj).forEach(k => {
-    const key = k.trim();
-    let val = obj[k];
-    if (typeof val === 'string') val = val.trim();
-    nuevo[key] = val;
-  });
-  return nuevo;
-}
+// function limpiarEspacios(obj: any) {
+//   const nuevo: any = {};
+//   Object.keys(obj).forEach(k => {
+//     const key = k.trim();
+//     let val = obj[k];
+//     if (typeof val === 'string') val = val.trim();
+//     nuevo[key] = val;
+//   });
+//   return nuevo;
+// }
 
 function App() {
   const [resultados, setResultados] = useState<any[]>([]);
   const [solicitanteSeleccionado, setSolicitanteSeleccionado] = useState<string>('');
   const [filtroEstatus, setFiltroEstatus] = useState<string>('Todos');
   const [numeroEmpleadoFiltro, setNumeroEmpleadoFiltro] = useState<string>('');
-  const [datosSolicitante, setDatosSolicitante] = useState<any>(null);
+  // const [datosSolicitante, setDatosSolicitante] = useState<any>(null);
   const [errorMessages, setErrorMessages] = useState<{ id: number; text: string }[]>([]);
-  const [errorId, setErrorId] = useState(0);
+  // const [errorId, setErrorId] = useState(0);
 
   // Utilidad para mostrar un mensaje de error
-  const showError = (text: string) => {
-    setErrorMessages(prev => {
-      const id = errorId + 1;
-      setErrorId(id);
-      return [...prev, { id, text }];
-    });
-  };
+  // const showError = (text: string) => {
+  //   setErrorMessages(prev => {
+  //     const id = errorId + 1;
+  //     setErrorId(id);
+  //     return [...prev, { id, text }];
+  //   });
+  // };
 
   // Eliminar mensaje por id
   const removeError = (id: number) => {
@@ -46,62 +46,81 @@ function App() {
     }
   }, [errorMessages]);
 
+  // useEffect(() => {
+  //   if (numeroEmpleadoFiltro) {
+  //     // Obtener datos del solicitante
+  //     fetch(`http://localhost:3000/api/solicitante?numEmpleado=${encodeURIComponent(numeroEmpleadoFiltro)}`)
+  //       .then(res => {
+  //         if (!res.ok) throw new Error('Error al obtener solicitante');
+  //         return res.json();
+  //       })
+  //       .then(data => {
+  //         if (data && data.nombre) {
+  //           setDatosSolicitante({
+  //             solicitante: data.nombre,
+  //             correo: data.correo,
+  //             departamento: data.departamento,
+  //             empresa: data.empresa,
+  //             numeroEmpleado: data.idInterno,
+  //             subDepartamento: data.subDepartamento,
+  //             centroCostos: '', // Limpia centro de costos, lo llenará el form si aplica
+  //           });
+  //         } else {
+  //           setDatosSolicitante({
+  //             solicitante: '',
+  //             correo: '',
+  //             departamento: '',
+  //             empresa: '',
+  //             numeroEmpleado: '',
+  //             subDepartamento: '',
+  //             centroCostos: '',
+  //           });
+  //         }
+  //       })
+  //       .catch(() => showError('Error al obtener datos del solicitante'));
+
+  //     // Obtener resultados
+  //     fetch(`http://localhost:3000/api/resultados?numeroEmpleado=${encodeURIComponent(numeroEmpleadoFiltro)}`)
+  //       .then(res => {
+  //         if (!res.ok) throw new Error('Error al obtener resultados');
+  //         return res.json();
+  //       })
+  //       .then(data => {
+  //         setResultados((data || []).map(limpiarEspacios));
+  //       })
+  //       .catch(() => showError('Error al obtener resultados'));
+  //   } else {
+  //     setResultados([]);
+  //     // setDatosSolicitante({
+  //     //   solicitante: '',
+  //     //   correo: '',
+  //     //   departamento: '',
+  //     //   empresa: '',
+  //     //   numeroEmpleado: '',
+  //     //   subDepartamento: '',
+  //     //   centroCostos: '',
+  //     // });
+  //   }
+  // }, [numeroEmpleadoFiltro]);
+
+  // --- DESCOMENTA Y USA ESTE EFFECT PARA QUE SE HAGA LA LLAMADA AUTOMÁTICA ---
   useEffect(() => {
     if (numeroEmpleadoFiltro) {
-      // Obtener datos del solicitante
-      fetch(`http://localhost:3000/api/solicitante?numEmpleado=${encodeURIComponent(numeroEmpleadoFiltro)}`)
-        .then(res => {
-          if (!res.ok) throw new Error('Error al obtener solicitante');
-          return res.json();
-        })
-        .then(data => {
-          if (data && data.nombre) {
-            setDatosSolicitante({
-              solicitante: data.nombre,
-              correo: data.correo,
-              departamento: data.departamento,
-              empresa: data.empresa,
-              numeroEmpleado: data.idInterno,
-              subDepartamento: data.subDepartamento,
-              centroCostos: '', // Limpia centro de costos, lo llenará el form si aplica
-            });
-          } else {
-            setDatosSolicitante({
-              solicitante: '',
-              correo: '',
-              departamento: '',
-              empresa: '',
-              numeroEmpleado: '',
-              subDepartamento: '',
-              centroCostos: '',
-            });
-          }
-        })
-        .catch(() => showError('Error al obtener datos del solicitante'));
-
-      // Obtener resultados
       fetch(`http://localhost:3000/api/resultados?numeroEmpleado=${encodeURIComponent(numeroEmpleadoFiltro)}`)
-        .then(res => {
-          if (!res.ok) throw new Error('Error al obtener resultados');
-          return res.json();
-        })
-        .then(data => {
-          setResultados((data || []).map(limpiarEspacios));
-        })
-        .catch(() => showError('Error al obtener resultados'));
+        .then(res => res.json())
+        .then(data => setResultados(data || []))
+        .catch(() => {
+          setResultados([]);
+          setErrorMessages(prev => [
+            ...prev,
+            { id: Date.now(), text: 'Error al obtener resultados' }
+          ]);
+        });
     } else {
       setResultados([]);
-      setDatosSolicitante({
-        solicitante: '',
-        correo: '',
-        departamento: '',
-        empresa: '',
-        numeroEmpleado: '',
-        subDepartamento: '',
-        centroCostos: '',
-      });
     }
   }, [numeroEmpleadoFiltro]);
+  // --------------------------------------------------------------------------
 
   const handleFormSubmit = (data: any) => {
     setResultados(prev => [

@@ -40,3 +40,44 @@
 .read-the-docs {
   color: #888;
 }
+
+.app-container,
+.app-container * {
+  color: #111 !important;
+}
+
+/* Si quieres que los placeholders también sean negros */
+input::placeholder,
+textarea::placeholder {
+  color: #222 !important;
+  opacity: 1;
+}
+
+.input-dark-placeholder::placeholder,
+.select-dark-placeholder {
+  color: #bbb !important;
+  opacity: 1;
+  background: #333 !important;
+}
+
+.input-light-placeholder::placeholder,
+.select-light-placeholder {
+  color: #888 !important;
+  opacity: 1;
+  background: #fff !important;
+}
+
+/* Select estilo según tema */
+.select-dark-placeholder,
+.app-container.dark select {
+  background: #333 !important;
+  color: #f3f3f3 !important;
+  border: 1px solid #444 !important;
+}
+
+.select-light-placeholder,
+.app-container.light select {
+  background: #fff !important;
+  color: #111 !important;
+  border: 1px solid #cfd8dc !important;
+}

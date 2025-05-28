@@ -129,14 +129,14 @@ const ResultadosTabla: React.FC<ResultadosTablaProps> = ({
                     transition: 'background 0.2s'
                   }}
                 >
-                  <td style={{ padding: 8 }}>{row.solicitante}</td>
-                  <td style={{ padding: 8 }}>{row.numeroEmpleado}</td>
-                  <td style={{ padding: 8 }}>{row.departamento}</td>
-                  <td style={{ padding: 8 }}>{row.subDepartamento}</td>
-                  <td style={{ padding: 8 }}>{row.categoriaGasto}</td>
-                  <td style={{ padding: 8 }}>{row.cuentaGastos}</td>
-                  <td style={{ padding: 8 }}>{row.proveedor}</td>
-                  <td style={{ textAlign: 'right', padding: 8, fontWeight: 500 }}>
+                  <td style={{ padding: 8, color: '#111' }}>{row.solicitante}</td>
+                  <td style={{ padding: 8, color: '#111' }}>{row.numeroEmpleado}</td>
+                  <td style={{ padding: 8, color: '#111' }}>{row.departamento}</td>
+                  <td style={{ padding: 8, color: '#111' }}>{row.subDepartamento}</td>
+                  <td style={{ padding: 8, color: '#111' }}>{row.categoriaGasto}</td>
+                  <td style={{ padding: 8, color: '#111' }}>{row.cuentaGastos}</td>
+                  <td style={{ padding: 8, color: '#111' }}>{row.proveedor}</td>
+                  <td style={{ textAlign: 'right', padding: 8, fontWeight: 500, color: '#111' }}>
                     {row.montoSubtotal !== undefined && row.montoSubtotal !== null && row.montoSubtotal !== ''
                       ? Number(row.montoSubtotal).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
                       : ''}
@@ -168,7 +168,7 @@ const ResultadosTabla: React.FC<ResultadosTablaProps> = ({
                       {row.estatusConfirmacion}
                     </span>
                   </td>
-                  <td style={{ padding: 8 }}>
+                  <td style={{ padding: 8, color: '#111' }}>
                     {(() => {
                       if (!row.Fecha) {
                         row.Fecha = new Date().toISOString();
@@ -182,7 +182,7 @@ const ResultadosTabla: React.FC<ResultadosTablaProps> = ({
               <tr>
                 <td colSpan={14} style={{
                   textAlign: 'center',
-                  color: '#888',
+                  color: '#111',
                   fontSize: 18,
                   padding: 32,
                   background: '#fffbe7',
@@ -207,12 +207,13 @@ const ResultadosTabla: React.FC<ResultadosTablaProps> = ({
               borderRadius: 6,
               border: '1px solid #bdbdbd',
               background: pagina === 1 ? '#eee' : '#fff',
-              cursor: pagina === 1 ? 'not-allowed' : 'pointer'
+              cursor: pagina === 1 ? 'not-allowed' : 'pointer',
+              color: '#111' // Letras negras
             }}
           >
             Anterior
           </button>
-          <span style={{ alignSelf: 'center', fontWeight: 500 }}>
+          <span style={{ alignSelf: 'center', fontWeight: 500, color: '#111' }}>
             Página {pagina} de {totalPaginas}
           </span>
           <button
@@ -223,7 +224,8 @@ const ResultadosTabla: React.FC<ResultadosTablaProps> = ({
               borderRadius: 6,
               border: '1px solid #bdbdbd',
               background: pagina === totalPaginas ? '#eee' : '#fff',
-              cursor: pagina === totalPaginas ? 'not-allowed' : 'pointer'
+              cursor: pagina === totalPaginas ? 'not-allowed' : 'pointer',
+              color: '#111' // Letras negras
             }}
           >
             Siguiente
