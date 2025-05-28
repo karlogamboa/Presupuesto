@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import apiConfig from '../config/apiConfig'; // Importa la configuración de la API
 
 interface Option {
   value: string;
@@ -60,7 +61,7 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
   };
 
   useEffect(() => {
-    fetch('http://localhost:3000/api/departamentos')
+    fetch(`${apiConfig.baseURL}/api/departamentos`) // Usa la URL base desde la configuración
       .then(res => res.json())
       .then((data: any[]) => {
         logApiResponse('departamentos', data);
@@ -84,7 +85,7 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
       .catch(error => {
         console.error("Error al cargar departamentos:", error);
       });
-    fetch('http://localhost:3000/api/categorias-gasto')
+    fetch(`${apiConfig.baseURL}/api/categorias-gasto`) // Usa la URL base desde la configuración
       .then(res => res.json())
       .then(data => {
         logApiResponse('categorias-gasto', data);
@@ -95,7 +96,7 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
         }));
         setCategorias(categoriasData);
       });
-    fetch('http://localhost:3000/api/proveedores')
+    fetch(`${apiConfig.baseURL}/api/proveedores`) // Usa la URL base desde la configuración
       .then(res => res.json())
       .then((data: any[]) => {
         logApiResponse('proveedores', data);
@@ -238,7 +239,7 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
     if (numEmpleadoTimeout) clearTimeout(numEmpleadoTimeout);
     const timeout = setTimeout(() => {
       if (value.trim()) {
-        fetch(`http://localhost:3000/api/solicitante?numEmpleado=${encodeURIComponent(value.trim())}`)
+        fetch(`${apiConfig.baseURL}/api/solicitante?numEmpleado=${encodeURIComponent(value.trim())}`) // Usa la URL base desde la configuración
           .then(res => res.json())
           .then((data: any) => {
             logApiResponse('solicitante', data);
@@ -459,7 +460,7 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
     };
 
     try {
-      const response = await fetch('http://localhost:3000/api/guardar-presupuesto', {
+      const response = await fetch(`${apiConfig.baseURL}/api/guardar-presupuesto`, { // Usa la URL base desde la configuración
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

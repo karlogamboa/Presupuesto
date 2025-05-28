@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import apiConfig from '../config/apiConfig'; // Importa la configuración de la API
 
 interface ResultadosTablaProps {
   data?: any[];
@@ -21,7 +22,7 @@ const ResultadosTabla: React.FC<ResultadosTablaProps> = ({
 
   useEffect(() => {
     if (!propData) {
-      fetch('http://localhost:3000/api/resultados')
+      fetch(`${apiConfig.baseURL}/api/resultados`) // Usa la URL base desde la configuración
         .then(res => res.json())
         .then(apiData => setData(apiData || []));
     } else {

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import SolicitudGastoForm from './components/SolicitudGastoForm';
 import ResultadosTabla from './components/ResultadosTabla';
+import apiConfig from './config/apiConfig'; // Importa la configuración de la API
 import './App.css';
 
 // function limpiarEspacios(obj: any) {
@@ -46,67 +47,10 @@ function App() {
     }
   }, [errorMessages]);
 
-  // useEffect(() => {
-  //   if (numeroEmpleadoFiltro) {
-  //     // Obtener datos del solicitante
-  //     fetch(`http://localhost:3000/api/solicitante?numEmpleado=${encodeURIComponent(numeroEmpleadoFiltro)}`)
-  //       .then(res => {
-  //         if (!res.ok) throw new Error('Error al obtener solicitante');
-  //         return res.json();
-  //       })
-  //       .then(data => {
-  //         if (data && data.nombre) {
-  //           setDatosSolicitante({
-  //             solicitante: data.nombre,
-  //             correo: data.correo,
-  //             departamento: data.departamento,
-  //             empresa: data.empresa,
-  //             numeroEmpleado: data.idInterno,
-  //             subDepartamento: data.subDepartamento,
-  //             centroCostos: '', // Limpia centro de costos, lo llenará el form si aplica
-  //           });
-  //         } else {
-  //           setDatosSolicitante({
-  //             solicitante: '',
-  //             correo: '',
-  //             departamento: '',
-  //             empresa: '',
-  //             numeroEmpleado: '',
-  //             subDepartamento: '',
-  //             centroCostos: '',
-  //           });
-  //         }
-  //       })
-  //       .catch(() => showError('Error al obtener datos del solicitante'));
-
-  //     // Obtener resultados
-  //     fetch(`http://localhost:3000/api/resultados?numeroEmpleado=${encodeURIComponent(numeroEmpleadoFiltro)}`)
-  //       .then(res => {
-  //         if (!res.ok) throw new Error('Error al obtener resultados');
-  //         return res.json();
-  //       })
-  //       .then(data => {
-  //         setResultados((data || []).map(limpiarEspacios));
-  //       })
-  //       .catch(() => showError('Error al obtener resultados'));
-  //   } else {
-  //     setResultados([]);
-  //     // setDatosSolicitante({
-  //     //   solicitante: '',
-  //     //   correo: '',
-  //     //   departamento: '',
-  //     //   empresa: '',
-  //     //   numeroEmpleado: '',
-  //     //   subDepartamento: '',
-  //     //   centroCostos: '',
-  //     // });
-  //   }
-  // }, [numeroEmpleadoFiltro]);
-
   // --- DESCOMENTA Y USA ESTE EFFECT PARA QUE SE HAGA LA LLAMADA AUTOMÁTICA ---
   useEffect(() => {
     if (numeroEmpleadoFiltro) {
-      fetch(`http://localhost:3000/api/resultados?numeroEmpleado=${encodeURIComponent(numeroEmpleadoFiltro)}`)
+      fetch(`${apiConfig.baseURL}/api/resultados?numeroEmpleado=${encodeURIComponent(numeroEmpleadoFiltro)}`) // Usa la URL base desde la configuración
         .then(res => res.json())
         .then(data => setResultados(data || []))
         .catch(() => {

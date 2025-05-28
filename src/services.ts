@@ -1,28 +1,29 @@
+import apiConfig from './config/apiConfig'; // Importa la configuración de la API
+
 // Este archivo contendrá servicios para consumir el backend y obtener las listas necesarias para el formulario de solicitud de Presuupuesto.
 
 export async function fetchSolicitantes() {
-  // Reemplazar URL por la de tu backend
-  const res = await fetch('http://localhost:3000/api/solicitantes');
+  const res = await fetch(`${apiConfig.baseURL}/api/solicitantes`);
   return res.json();
 }
 
 export async function fetchAreas() {
-  const res = await fetch('http://localhost:3000/api/areas');
+  const res = await fetch(`${apiConfig.baseURL}/api/areas`);
   return res.json();
 }
 
 export async function fetchSubDepartamentos(areaId: string) {
-  const res = await fetch(`http://localhost:3000/api/subdepartamentos?areaId=${areaId}`);
+  const res = await fetch(`${apiConfig.baseURL}/api/subdepartamentos?areaId=${areaId}`);
   return res.json();
 }
 
 export async function fetchCategoriasGasto() {
-  const res = await fetch('http://localhost:3000/api/categorias-gasto');
+  const res = await fetch(`${apiConfig.baseURL}/api/categorias-gasto`);
   return res.json();
 }
 
 export async function fetchCorreos() {
-  const res = await fetch('http://localhost:3000/api/correos');
+  const res = await fetch(`${apiConfig.baseURL}/api/correos`);
   return res.json();
 }
 

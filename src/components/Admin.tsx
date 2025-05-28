@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import apiConfig from '../config/apiConfig'; // Importa la configuración de la API
 
 interface Solicitud {
   [key: string]: any;
@@ -32,7 +33,7 @@ const Admin: React.FC = () => {
   }>({ open: false, idx: null, nuevoEstatus: '', solicitud: null });
 
   useEffect(() => {
-    fetch('http://localhost:3000/api/resultados')
+    fetch(`${apiConfig.baseURL}/api/resultados`) // Usa la URL base desde la configuración
       .then(res => res.json())
       .then(data => setSolicitudes(data || []));
   }, []);
@@ -149,7 +150,7 @@ const Admin: React.FC = () => {
     // Actualizar en backend - Asegurarnos que se envíe el nuevo estatus correctamente
     const solicitudActualizada = { ...solicitud, estatusConfirmacion: nuevoEstatus };
     
-    fetch(`http://localhost:3000/api/editar-estatus`, {
+    fetch(`${apiConfig.baseURL}/api/editar-estatus`, { // Usa la URL base desde la configuración
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -161,7 +162,6 @@ const Admin: React.FC = () => {
     .then(response => {
       if (!response.ok) {
         console.error('Error al actualizar el estatus', response.statusText);
-        // Podríamos revertir el cambio local si hay error
       }
       return response.json();
     })
