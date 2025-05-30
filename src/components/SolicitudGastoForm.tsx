@@ -7,7 +7,6 @@ interface Option {
   numeroEmpleado?: string;
   cuentaGastos?: string;
   categoriaGasto?: string;
-  Descripción?: string; // Agregar la propiedad Descripción
 }
 
 interface FormData {
@@ -48,23 +47,12 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
   const [empresa, setEmpresa] = useState<string>('');
   const [categoriasFiltradas, setCategoriasFiltradas] = useState<Option[]>([]);
   const [selectedProvider, setSelectedProvider] = useState<Option | null>(null);
+  const [filtrarPorCategoria, setFiltrarPorCategoria] = useState<boolean>(true);
   const [errorPopups, setErrorPopups] = useState<{ id: number; message: string }[]>([]);
   const errorTimeoutsRef = useRef<{ [id: number]: ReturnType<typeof setTimeout> }>({});
   const nextErrorId = useRef(1);
 
   const baseURL = apiConfig.baseURL; // Use the baseURL directly from the imported JSON
-
-  const [periodoPresupuesto, setPeriodoPresupuesto] = useState<string>('');
-  const [periodos, setPeriodos] = useState<string[]>([]);
-
-  useEffect(() => {
-    const currentYear = new Date().getFullYear();
-    const months = [
-      'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-      'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
-    ];
-    setPeriodos(months.map(month => `${month} ${currentYear}`));
-  }, []);
 
   useEffect(() => {
     if (baseURL) {
@@ -92,30 +80,23 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
         .then(res => res.json())
         .then(data => {
           const categoriasData = (data || []).map((d: any) => ({
-            value: String(d.cuenta || d.Cuenta || ''),
-            label: d['Cuenta de gastos'] || '',
+            value: String(d.categoriaGasto || d.Nombre || d.nombre),
+            label: d.categoriaGasto || d.Nombre || d.nombre,
+            cuentaGastos: d.cuentaGastos || d.Cuenta || d.cuenta || ''
           }));
           setCategorias(categoriasData);
-          setCategoriasFiltradas(
-            categoriasData.filter((categoria: Option, index: number, self: Option[]) =>
-              index === self.findIndex((c: Option) => c.label === categoria.label)
-            )
-          ); // Resetear el filtro al cargar desde la API sin duplicados
         });
       fetch(`${baseURL}/api/proveedores`)
         .then(res => res.json())
         .then((data: any[]) => {
           const lista = (data || []).map((d: any) => ({
-            value: String(d.Nombre || '').trim(),
-            label: String(d.Nombre || '').trim(),
-            numeroEmpleado: d['Número Proveedor'] || '',
-            cuentaGastos: (d.CuentasGasto || []).join(', '), // Join array into a comma-separated string
-            categoriaGasto: d.Categoría || '',
+            value: String((d.nombre || d.Nombre || d.proveedor || '').trim()),
+            label: (d.nombre || d.Nombre || d.proveedor || '').trim(),
+            numeroEmpleado: d.numeroEmpleado || d.NumeroEmpleado || '',
+            cuentaGastos: d.cuentaGastos || d.CuentaGastos || d.cuenta || '',
+            categoriaGasto: d.categoriaGasto || d.CategoriaGasto || d.categoria || d['Categoría'] || ''
           }));
           setProveedores(lista);
-        })
-        .catch(error => {
-          console.error("Error al cargar proveedores:", error);
         });
     }
   }, [baseURL]);
@@ -182,7 +163,6 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
   }, [proveedorInput, proveedores]);
   useEffect(() => {
     if (!selectedProvider) {
-      console.log("No hay proveedor seleccionado. Mostrando todas las categorías.");
       setCategoriasFiltradas(categorias);
       setForm(prevForm => ({
         ...prevForm,
@@ -192,51 +172,53 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
       return;
     }
 
-    if (selectedProvider.cuentaGastos && selectedProvider.cuentaGastos.trim() !== '') {
-      const cuentasProveedor = selectedProvider.cuentaGastos.split(',').map(cuenta => cuenta.trim().toLowerCase());
-      console.log("Cuentas del proveedor:", cuentasProveedor);
-
-      const nuevasCategoriasFiltradas = categorias.filter(categoria => {
-        const categoriaNombre = categoria.label.toLowerCase();
-        const match = cuentasProveedor.some(cuenta => categoriaNombre.endsWith(cuenta));
-        console.log(`Comparando categoría "${categoriaNombre}" con cuentas del proveedor: ${match ? 'MATCH' : 'NO MATCH'}`);
-        return match;
-      });
-
-      console.log("Categorías filtradas:", nuevasCategoriasFiltradas);
-
-      setCategoriasFiltradas(nuevasCategoriasFiltradas.map(categoria => ({
-        ...categoria,
-        label: categoria.label // Mostrar solo el label
-      })));
-
-      if (nuevasCategoriasFiltradas.length === 1) {
-        const catUnica = nuevasCategoriasFiltradas[0];
-        console.log("Solo una categoría encontrada:", catUnica);
-        setForm(prevForm => ({
-          ...prevForm,
-          categoriaGasto: catUnica.value,
-          cuentaGastos: catUnica.value,
-        }));
-      } else {
-        setForm(prevForm => ({
-          ...prevForm,
-          categoriaGasto: '',
-          cuentaGastos: '',
-        }));
-      }
-    } else {
-      console.log("El proveedor tiene una lista vacía de CuentasGasto. Mostrando todas las categorías.");
-      setCategoriasFiltradas(categorias); // Mostrar todas las categorías
+    // Si el filtrado está desactivado o el proveedor no tiene categoría, mostrar todas
+    if (!filtrarPorCategoria || !selectedProvider.categoriaGasto || categorias.length === 0) {
+      setCategoriasFiltradas(categorias);
       setForm(prevForm => ({
         ...prevForm,
         categoriaGasto: '',
-        cuentaGastos: '',
+        cuentaGastos: selectedProvider ? selectedProvider.cuentaGastos || '' : '',
+      }));
+      return;
+    }
+
+    const categoriaProveedor = selectedProvider.categoriaGasto.toLowerCase();
+    const palabrasClave = categoriaProveedor.split(/\s+|\s*y\s*|\s*&\s*/)
+                                      .map(p => p.trim().toLowerCase())
+                                      .filter(p => p && p.length > 1);
+
+    let nuevasCategoriasFiltradas = categorias;
+
+    if (palabrasClave.length > 0) {
+      const coincidentes = categorias.filter(c => {
+        const labelCategoria = c.label.toLowerCase();
+        return palabrasClave.some(palabra => labelCategoria.includes(palabra));
+      });
+      nuevasCategoriasFiltradas = coincidentes;
+    }
+
+    setCategoriasFiltradas(nuevasCategoriasFiltradas);
+
+    if (nuevasCategoriasFiltradas.length === 1) {
+      const catUnica = nuevasCategoriasFiltradas[0];
+      setForm(prevForm => ({
+        ...prevForm,
+        categoriaGasto: catUnica.value,
+        cuentaGastos: catUnica.cuentaGastos || selectedProvider.cuentaGastos || '',
+      }));
+    } else {      setForm(prevForm => ({
+        ...prevForm,
+        categoriaGasto: '',
+        cuentaGastos: selectedProvider.cuentaGastos || '',
       }));
     }
-  }, [selectedProvider, categorias]);
+  }, [selectedProvider, categorias, filtrarPorCategoria]);
 
   // Function for debugging API responses
+  const logApiResponse = (endpoint: string, data: any) => {
+    console.log(`API Response from ${endpoint}:`, data);
+  };
 
   const handleNumeroEmpleadoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -255,17 +237,7 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
         fetch(`${baseURL}/api/solicitante?numEmpleado=${encodeURIComponent(value.trim())}`)
           .then(res => res.json())
           .then((data: any) => {
-            if (!data || !data.Nombre) {
-              // Clear form if employee does not exist
-              setForm(f => ({
-                ...f,
-                solicitante: '',
-                correo: '',
-                departamento: '',
-                subDepartamento: '',
-                centroCostos: ''
-              }));
-            }
+            logApiResponse('solicitante', data); // Use the logApiResponse function
             // Extraer nombre del solicitante
             const nombre = data?.Nombre || data?.nombre || '';
             
@@ -387,7 +359,7 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
           centroCostos: ''
         }));
       }
-    }, 1000); // Increase debounce time to 1000ms
+    }, 600);
     setNumEmpleadoTimeout(timeout);
   };
 
@@ -464,9 +436,6 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    const categoriaSeleccionada = categoriasFiltradas.find(c => c.value === form.categoriaGasto);
-
     const payload = {
       solicitante: form.solicitante,
       numeroEmpleado: form.numeroEmpleado,
@@ -477,16 +446,15 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
       departamento: form.departamento,
       subDepartamento: form.subDepartamento,
       centroCostos: form.centroCostos,
-      categoriaGasto: categoriaSeleccionada?.label || '',
-      cuentaGastos: form.categoriaGasto,
+      categoriaGasto: form.categoriaGasto,
+      cuentaGastos: form.cuentaGastos,
       nombre: form.solicitante,
       montoSubtotal: form.montoSubtotal,
-      periodoPresupuesto, // Include the selected period
       Fecha: new Date().toISOString(),
     };
 
     try {
-      const response = await fetch(`${baseURL}/api/guardar-presupuesto`, {
+      const response = await fetch(`${baseURL}/api/guardar-presupuesto`, { // Usa la URL base desde la configuración
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -546,7 +514,7 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
           <div
             key={popup.id}
             style={{
-              background: theme === 'dark' ? '#e57373' : '#ff5252',
+              background: '#e57373',
               color: '#fff',
               padding: '18px 48px 18px 24px',
               borderRadius: 10,
@@ -707,8 +675,8 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
               className={theme === 'dark' ? 'select-dark-placeholder' : 'select-light-placeholder'}
             >
               <option value="">Seleccione</option>
-              {departamentos.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              {departamentos.map((opt, idx) => (
+                <option key={opt.value + '-' + idx} value={opt.value}>{opt.label}</option>
               ))}
             </select>
           </div>
@@ -763,36 +731,7 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
               }}
             />
           </div>
-          <div className="form-group" style={{ gridColumn: '1 / 2' }}>
-            <label style={{
-              fontWeight: 500,
-              marginBottom: 6,
-              display: 'block',
-              textAlign: 'left',
-              color: theme === 'dark' ? '#f3f3f3' : '#111'
-            }}>Periodo de Solicitud:</label>
-            <select
-              name="periodoPresupuesto"
-              value={periodoPresupuesto}
-              onChange={e => setPeriodoPresupuesto(e.target.value)}
-              required
-              style={{
-                width: '100%',
-                padding: 8,
-                borderRadius: 6,
-                border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc',
-                color: theme === 'dark' ? '#f3f3f3' : '#111',
-                background: theme === 'dark' ? '#333' : '#fff'
-              }}
-              className={theme === 'dark' ? 'select-dark-placeholder' : 'select-light-placeholder'}
-            >
-              <option value="">Seleccione</option>
-              {periodos.map((periodo, idx) => (
-                <option key={periodo + '-' + idx} value={periodo}>{periodo}</option>
-              ))}
-            </select>
-          </div>
-          <div className="form-group" style={{ gridColumn: '2 / 4', position: 'relative', zIndex: 20 }}>
+          <div className="form-group" style={{ gridColumn: '1 / 4', position: 'relative', zIndex: 20 }}>
             <label style={{
               fontWeight: 500,
               marginBottom: 6,
@@ -817,40 +756,22 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
               }}
               className={theme === 'dark' ? 'input-dark-placeholder' : 'input-light-placeholder'}
             />
-            <div style={{
-              marginTop: 8,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <label style={{
-                  fontSize: '0.85em',
-                  color: theme === 'dark' ? '#f3f3f3' : '#111'
-                }}>Categoría:</label>
-                <span style={{
-                  fontSize: '0.85em',
-                  color: theme === 'dark' ? '#f3f3f3' : '#111'
-                }}>{selectedProvider?.categoriaGasto || ''}</span>
+            {selectedProvider && selectedProvider.categoriaGasto && (
+              <div style={{ fontSize: '0.85em', color: '#555', margin: '4px 0 0 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div>
+                  Categoría del proveedor: <span style={{ fontWeight: 'bold' }}>{selectedProvider.categoriaGasto}</span>
+                </div>
+                <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', marginLeft: 'auto' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={filtrarPorCategoria} 
+                    onChange={(e) => setFiltrarPorCategoria(e.target.checked)}
+                    style={{ marginRight: '4px' }}
+                  />
+                  <span>Filtrar categorías</span>
+                </label>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <input
-                  type="checkbox"
-                  id="sinProveedor"
-                  checked={!selectedProvider}
-                  onChange={() => {
-                    setSelectedProvider(null);
-                    setProveedor('');
-                    setProveedorInput('');
-                    setCategoriasFiltradas(categorias); // Quitar el filtro de cuentas de gasto
-                  }}
-                />
-                <label htmlFor="sinProveedor" style={{
-                  fontSize: '0.85em',
-                  color: theme === 'dark' ? '#f3f3f3' : '#111'
-                }}>Sin Proveedor</label>
-              </div>
-            </div>
+            )}
             {proveedorInput && proveedoresFiltrados.length > 0 && !proveedor && (
               <div
                 style={{
@@ -874,11 +795,6 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
                       setSelectedProvider(prov);
                       setProveedor(prov.value); 
                       setProveedorInput(prov.label);
-                      const cuentasProveedor = prov.cuentaGastos?.split(',').map((cuenta: string) => cuenta.trim().toLowerCase()) || [];
-                      const nuevasCategoriasFiltradas = categorias.filter(categoria =>
-                        cuentasProveedor.includes(categoria.value.toLowerCase())
-                      );
-                      setCategoriasFiltradas(nuevasCategoriasFiltradas);
                     }}
                     style={{
                       padding: 12,
@@ -892,7 +808,7 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
                   >
                     <span style={{ fontWeight: 600, color: '#1976d2', fontSize: 16 }}>{prov.label}</span>
                     {prov.numeroEmpleado && (
-                      <span style={{ color: '#888', fontSize: 13 }}>Núm. Proveedor: {prov.numeroEmpleado}</span>
+                      <span style={{ color: '#888', fontSize: 13 }}>Núm. Empleado: {prov.numeroEmpleado}</span>
                     )}
                     {prov.categoriaGasto && (
                       <span style={{ color: '#888', fontSize: 13 }}>Categoría: {prov.categoriaGasto}</span>
@@ -905,60 +821,57 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
               </div>
             )}
           </div>
-          <div className="form-group" style={{ gridColumn: '1 / 3', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <div>
-              <label style={{
-                fontWeight: 500,
-                marginBottom: 6,
-                display: 'block',
-                textAlign: 'left',
+          <div className="form-group" style={{ gridColumn: '1 / 2' }}>
+            <label style={{
+              fontWeight: 500,
+              marginBottom: 6,
+              display: 'block',
+              textAlign: 'left',
+              color: theme === 'dark' ? '#f3f3f3' : '#111'
+            }}>Categoría de Gasto:</label>
+            <select
+              name="categoriaGasto"
+              value={form.categoriaGasto}
+              onChange={handleChange}
+              required
+              style={{
+                width: '100%',
+                padding: 8,
+                borderRadius: 6,
+                border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc',
+                color: theme === 'dark' ? '#f3f3f3' : '#111',
+                background: theme === 'dark' ? '#333' : '#fff'
+              }}
+              className={theme === 'dark' ? 'select-dark-placeholder' : 'select-light-placeholder'}
+            >
+              <option value="">Seleccione</option>
+              {categoriasFiltradas.map((opt, idx) => (
+                <option key={opt.value + '-' + idx} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group" style={{ gridColumn: '2 / 3' }}>
+            <label style={{
+              fontWeight: 500,
+              marginBottom: 6,
+              display: 'block',
+              textAlign: 'left',
+              color: theme === 'dark' ? '#f3f3f3' : '#111'
+            }}>Cuenta de Gastos:</label>
+            <input
+              name="cuentaGastos"
+              value={form.cuentaGastos}
+              readOnly
+              required
+              style={{
+                width: '100%',
+                padding: 8,
+                borderRadius: 6,
+                border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc',
+                background: theme === 'dark' ? '#333' : '#f7fafd',
                 color: theme === 'dark' ? '#f3f3f3' : '#111'
-              }}>Cuenta de Gastos:</label>
-              <select
-                name="categoriaGasto"
-                value={form.categoriaGasto}
-                onChange={handleChange}
-                required
-                style={{
-                  width: '100%',
-                  padding: 8,
-                  borderRadius: 6,
-                  border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc',
-                  color: theme === 'dark' ? '#f3f3f3' : '#111',
-                  background: theme === 'dark' ? '#333' : '#fff'
-                }}
-                className={theme === 'dark' ? 'select-dark-placeholder' : 'select-light-placeholder'}
-              >
-                <option value="">Seleccione</option>
-                {categoriasFiltradas.map((opt, idx) => (
-                  <option key={opt.value + '-' + idx} value={opt.value}>
-                    {opt.label} {/* Display only the label */}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label style={{
-                fontWeight: 500,
-                marginBottom: 6,
-                display: 'block',
-                textAlign: 'left',
-                color: theme === 'dark' ? '#f3f3f3' : '#111'
-              }}>Cuenta Seleccionada:</label>
-              <input
-                type="text"
-                value={form.categoriaGasto}
-                readOnly
-                style={{
-                  width: '100%',
-                  padding: 8,
-                  borderRadius: 6,
-                  border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc',
-                  background: theme === 'dark' ? '#333' : '#f7fafd',
-                  color: theme === 'dark' ? '#f3f3f3' : '#111'
-                }}
-              />
-            </div>
+              }}
+            />
           </div>
           <div className="form-group" style={{ gridColumn: '3 / 4' }}>
             <label style={{
