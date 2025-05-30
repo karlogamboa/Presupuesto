@@ -21,6 +21,27 @@ const ResultadosTabla: React.FC<ResultadosTablaProps> = ({
   const baseURL = apiConfig.baseURL; // Use the baseURL directly from the imported JSON
   const porPagina = 10;
 
+  // Function to get background color based on theme and status
+  const getRowBg = (estatus: string, idx: number, theme: 'dark' | 'light') => {
+    const clean = (estatus || '').trim().toLowerCase();
+    if (clean === 'confirmado') return theme === 'dark' ? '#2e7d32' : '#e8f5e9';
+    if (clean === 'rechazado') return theme === 'dark' ? '#c62828' : '#ffebee';
+    if (clean === 'pendiente') return theme === 'dark' ? '#f57c00' : '#fffde7';
+    return idx % 2 === 0 ? (theme === 'dark' ? '#424242' : '#f7fafd') : (theme === 'dark' ? '#303030' : '#fff');
+  };
+
+  // Detect theme (light/dark) from the body
+  const [theme, setTheme] = useState<'dark' | 'light'>(
+    typeof window !== 'undefined' && document.body.classList.contains('dark') ? 'dark' : 'light'
+  );
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setTheme(document.body.classList.contains('dark') ? 'dark' : 'light');
+    });
+    observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+
   useEffect(() => {
     if (!propData && baseURL) {
       fetch(`${baseURL}/api/resultados`) // Use the baseURL from apiConfig
@@ -49,41 +70,41 @@ const ResultadosTabla: React.FC<ResultadosTablaProps> = ({
   const totalPaginas = Math.ceil(dataOrdenada.length / porPagina);
   const datosPagina = dataOrdenada.slice((pagina - 1) * porPagina, pagina * porPagina);
 
-  // Función para obtener el color de fondo según el estatus
-  const getRowBg = (estatus: string, idx: number) => {
-    const clean = (estatus || '').trim().toLowerCase();
-    if (clean === 'confirmado') return '#e8f5e9';
-    if (clean === 'rechazado') return '#ffebee';
-    if (clean === 'pendiente') return '#fffde7';
-    return idx % 2 === 0 ? '#f7fafd' : '#fff';
-  };
-
-  // Renderiza un header con opción de ordenar
-  const renderHeader = (label: string, campo: string) => (
-    <th
-      style={{ padding: 8, userSelect: 'none', whiteSpace: 'nowrap' }}
-    >
-      {label}
-      {ordenCampo === campo && (
-        <span style={{ marginLeft: 4 }}>
-          {ordenAsc ? '⬆️' : '⬇️'}
-        </span>
-      )}
-    </th>
-  );
+  // Helper to render sortable headers
+  function renderHeader(label: string, campo: string) {
+    return (
+      <th
+        style={{
+          padding: 10,
+          cursor: 'pointer',
+          userSelect: 'none',
+          textAlign: 'left',
+          color: ordenCampo === campo ? (ordenAsc ? '#1976d2' : '#d32f2f') : 'inherit',
+        }}
+      >
+        {label}
+        {ordenCampo === campo && (
+          <span style={{ marginLeft: 4 }}>
+            {ordenAsc ? '⬆️' : '⬇️'}
+          </span>
+        )}
+      </th>
+    );
+  }
 
   return (
     <div
       style={{
         margin: '2rem auto',
         maxWidth: '100%',
-        background: '#f4f6fb',
+        background: theme === 'dark' ? '#212121' : '#f4f6fb',
         borderRadius: 16,
         padding: '2rem 1rem',
         boxShadow: '0 4px 24px #0002',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
+        color: theme === 'dark' ? '#f3f3f3' : '#111',
       }}
     >
       <div style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
@@ -92,30 +113,30 @@ const ResultadosTabla: React.FC<ResultadosTablaProps> = ({
             borderCollapse: 'separate',
             borderSpacing: 0,
             minWidth: 900,
-            background: '#fff',
+            background: theme === 'dark' ? '#424242' : '#fff',
             borderRadius: 12,
             overflow: 'hidden',
             boxShadow: '0 2px 12px #0001',
-            margin: '0 auto'
+            margin: '0 auto',
+            color: theme === 'dark' ? '#f3f3f3' : '#111',
           }}
         >
           <thead>
-            <tr style={{ background: '#1976d2', color: '#fff' }}>
-              <th colSpan={5} style={{ padding: 12, fontSize: 15, letterSpacing: 1 }}>INFO PERSONAL</th>
-              <th colSpan={2} style={{ padding: 12, fontSize: 15, letterSpacing: 1 }}>GASTO</th>
-              {/* <th colSpan={2} style={{ padding: 12, fontSize: 15, letterSpacing: 1 }}>PRESUPUESTO</th> */}
+            <tr style={{ background: theme === 'dark' ? '#1976d2' : '#1976d2', color: '#fff' }}>
+              <th colSpan={8} style={{ padding: 12, fontSize: 15, letterSpacing: 1 }}>INFO PERSONAL</th>
               <th style={{ padding: 12, fontSize: 15, letterSpacing: 1 }}>MONTO</th>
               <th style={{ padding: 12, fontSize: 15, letterSpacing: 1 }}>CONFIRMACIÓN</th>
               <th style={{ padding: 12, fontSize: 15, letterSpacing: 1 }}>FECHA</th>
             </tr>
-            <tr style={{ background: '#e3eafc', color: '#222' }}>
+            <tr style={{ background: theme === 'dark' ? '#424242' : '#e3eafc', color: theme === 'dark' ? '#f3f3f3' : '#222' }}>
               {renderHeader('Solicitante', 'solicitante')}
               {renderHeader('Núm. Empleado', 'numeroEmpleado')}
               {renderHeader('Departamento', 'departamento')}
               {renderHeader('SubDepartamento', 'subDepartamento')}
               {renderHeader('Categoría Gasto', 'categoriaGasto')}
               {renderHeader('Cuenta Gastos', 'cuentaGastos')}
-              {renderHeader('Proveedor', 'proveedor')}
+              {renderHeader('Proveedor', 'proveedor')} {/* Nueva columna */}
+              {renderHeader('Periodo Presupuesto', 'periodoPresupuesto')} {/* Corrección del nombre */}
               {renderHeader('Monto Solicitado', 'montoSubtotal')}
               {renderHeader('Estatus Confirmación', 'estatusConfirmacion')}
               {renderHeader('Fecha', 'Fecha')}
@@ -124,72 +145,77 @@ const ResultadosTabla: React.FC<ResultadosTablaProps> = ({
           <tbody>
             {datosPagina.length > 0 ? (
               datosPagina.map((row, idx) => (
-                <tr
-                  key={idx}
-                  style={{
-                    background: getRowBg(row.estatusConfirmacion, (pagina - 1) * porPagina + idx),
-                    transition: 'background 0.2s'
-                  }}
-                >
-                  <td style={{ padding: 8, color: '#111' }}>{row.solicitante}</td>
-                  <td style={{ padding: 8, color: '#111' }}>{row.numeroEmpleado}</td>
-                  <td style={{ padding: 8, color: '#111' }}>{row.departamento}</td>
-                  <td style={{ padding: 8, color: '#111' }}>{row.subDepartamento}</td>
-                  <td style={{ padding: 8, color: '#111' }}>{row.categoriaGasto}</td>
-                  <td style={{ padding: 8, color: '#111' }}>{row.cuentaGastos}</td>
-                  <td style={{ padding: 8, color: '#111' }}>{row.proveedor}</td>
-                  <td style={{ textAlign: 'right', padding: 8, fontWeight: 500, color: '#111' }}>
-                    {row.montoSubtotal !== undefined && row.montoSubtotal !== null && row.montoSubtotal !== ''
-                      ? Number(row.montoSubtotal).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
-                      : ''}
-                  </td>
-                  <td style={{ padding: 8 }}>
-                    <span style={{
-                      display: 'inline-block',
-                      minWidth: 110,
-                      textAlign: 'center',
-                      padding: '8px 18px',
-                      borderRadius: 16,
-                      background:
-                        row.estatusConfirmacion === 'Confirmado'
-                          ? '#43a047'
-                          : row.estatusConfirmacion === 'Rechazado'
-                          ? '#e57373'
-                          : '#ffe082',
-                      color:
-                        row.estatusConfirmacion === 'Confirmado'
-                          ? '#fff'
-                          : row.estatusConfirmacion === 'Rechazado'
-                          ? '#fff'
-                          : '#a15c00',
-                      fontWeight: 700,
-                      fontSize: 15,
-                      letterSpacing: 1,
-                      boxShadow: '0 1px 4px #0002'
-                    }}>
-                      {row.estatusConfirmacion}
-                    </span>
-                  </td>
-                  <td style={{ padding: 8, color: '#111' }}>
-                    {(() => {
-                      if (!row.Fecha) {
-                        row.Fecha = new Date().toISOString();
-                      }
-                      return new Date(row.Fecha).toLocaleDateString('es-MX', { year: 'numeric', month: '2-digit', day: '2-digit' });
-                    })()}
-                  </td>
-                </tr>
+                <React.Fragment key={idx}>
+                  <tr
+                    style={{
+                      background: getRowBg(row.estatusConfirmacion, (pagina - 1) * porPagina + idx, theme),
+                      transition: 'background 0.2s',
+                    }}
+                  >
+                    <td style={{ padding: 8, color: '#111' }}>{row.solicitante}</td>
+                    <td style={{ padding: 8, color: '#111' }}>{row.numeroEmpleado}</td>
+                    <td style={{ padding: 8, color: '#111' }}>{row.departamento}</td>
+                    <td style={{ padding: 8, color: '#111' }}>{row.subDepartamento}</td>
+                    <td style={{ padding: 8, color: '#111' }}>{row.categoriaGasto}</td>
+                    <td style={{ padding: 8, color: '#111' }}>{row.cuentaGastos}</td>
+                    <td style={{ padding: 8, color: '#111' }}>{row.proveedor}</td> {/* Nueva columna */}
+                    <td style={{ padding: 8, color: '#111' }}>{row.periodoPresupuesto}</td> {/* Corrección del nombre */}
+                    <td style={{ textAlign: 'right', padding: 8, fontWeight: 500, color: '#111' }}>
+                      {row.montoSubtotal !== undefined && row.montoSubtotal !== null && row.montoSubtotal !== ''
+                        ? Number(row.montoSubtotal).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
+                        : ''}
+                    </td>
+                    <td style={{ padding: 8 }}>
+                      <span style={{
+                        display: 'inline-block',
+                        minWidth: 110,
+                        textAlign: 'center',
+                        padding: '8px 18px',
+                        borderRadius: 16,
+                        background:
+                          row.estatusConfirmacion === 'Confirmado'
+                            ? '#43a047'
+                            : row.estatusConfirmacion === 'Rechazado'
+                            ? '#e57373'
+                            : '#ffe082',
+                        color:
+                          row.estatusConfirmacion === 'Confirmado'
+                            ? '#fff'
+                            : row.estatusConfirmacion === 'Rechazado'
+                            ? '#fff'
+                            : '#a15c00',
+                        fontWeight: 700,
+                        fontSize: 15,
+                        letterSpacing: 1,
+                        boxShadow: '0 1px 4px #0002'
+                      }}>
+                        {row.estatusConfirmacion}
+                      </span>
+                    </td>
+                    <td style={{ padding: 8, color: '#111' }}>
+                      {(() => {
+                        if (!row.Fecha) {
+                          row.Fecha = new Date().toISOString();
+                        }
+                        return new Date(row.Fecha).toLocaleDateString('es-MX', { year: 'numeric', month: '2-digit', day: '2-digit' });
+                      })()}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td colSpan={11} style={{ borderBottom: '1px solid #ddd' }}></td>
+                  </tr>
+                </React.Fragment>
               ))
             ) : (
               <tr>
-                <td colSpan={14} style={{
+                <td colSpan={11} style={{
                   textAlign: 'center',
-                  color: '#111',
+                  color: theme === 'dark' ? '#f3f3f3' : '#111',
                   fontSize: 18,
                   padding: 32,
-                  background: '#fffbe7',
+                  background: theme === 'dark' ? '#424242' : '#fffbe7',
                   borderRadius: 12,
-                  border: '1px solid #ffe082'
+                  border: theme === 'dark' ? '1px solid #f57c00' : '1px solid #ffe082',
                 }}>
                   No hay resultados para el filtro seleccionado.
                 </td>
@@ -207,15 +233,15 @@ const ResultadosTabla: React.FC<ResultadosTablaProps> = ({
             style={{
               padding: '6px 14px',
               borderRadius: 6,
-              border: '1px solid #bdbdbd',
-              background: pagina === 1 ? '#eee' : '#fff',
+              border: theme === 'dark' ? '1px solid #616161' : '1px solid #bdbdbd',
+              background: pagina === 1 ? (theme === 'dark' ? '#616161' : '#eee') : (theme === 'dark' ? '#424242' : '#fff'),
               cursor: pagina === 1 ? 'not-allowed' : 'pointer',
-              color: '#111' // Letras negras
+              color: theme === 'dark' ? '#f3f3f3' : '#111',
             }}
           >
             Anterior
           </button>
-          <span style={{ alignSelf: 'center', fontWeight: 500, color: '#111' }}>
+          <span style={{ alignSelf: 'center', fontWeight: 500, color: theme === 'dark' ? '#f3f3f3' : '#111' }}>
             Página {pagina} de {totalPaginas}
           </span>
           <button
@@ -224,10 +250,10 @@ const ResultadosTabla: React.FC<ResultadosTablaProps> = ({
             style={{
               padding: '6px 14px',
               borderRadius: 6,
-              border: '1px solid #bdbdbd',
-              background: pagina === totalPaginas ? '#eee' : '#fff',
+              border: theme === 'dark' ? '1px solid #616161' : '1px solid #bdbdbd',
+              background: pagina === totalPaginas ? (theme === 'dark' ? '#616161' : '#eee') : (theme === 'dark' ? '#424242' : '#fff'),
               cursor: pagina === totalPaginas ? 'not-allowed' : 'pointer',
-              color: '#111' // Letras negras
+              color: theme === 'dark' ? '#f3f3f3' : '#111',
             }}
           >
             Siguiente
