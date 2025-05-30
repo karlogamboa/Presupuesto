@@ -7,12 +7,13 @@ interface Solicitud {
 
 const camposFiltro = [
   { label: 'Solicitante', value: 'solicitante' },
-  { label: 'Número de Empleado', value: 'numeroEmpleado' },  
+  { label: 'Número de Empleado', value: 'numeroEmpleado' },
   { label: 'Proveedor', value: 'proveedor' },
   { label: 'Departamento', value: 'departamento' },
   { label: 'SubDepartamento', value: 'subDepartamento' },
   { label: 'Categoría Gasto', value: 'categoriaGasto' },
   { label: 'Cuenta Gastos', value: 'cuentaGastos' },
+  { label: 'Periodo', value: 'periodoPresupuesto' }, // Added filter
   { label: 'Estatus', value: 'estatusConfirmacion' },
   { label: 'Fecha', value: 'Fecha' },
 ];
@@ -203,44 +204,47 @@ const Admin: React.FC = () => {
       position: 'relative',
       background: theme === 'dark' ? '#232323' : '#fff',
       color: theme === 'dark' ? '#f3f3f3' : '#111',
-      borderRadius: 18
+      borderRadius: 18,
+      boxShadow: theme === 'dark' ? '0 4px 24px #0006' : '0 4px 24px #0002',
     }}>
       {/* Confirmación modal */}
       {confirmacion.open && (
         <div style={{
           position: 'fixed',
           top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(0,0,0,0.35)',
+          background: theme === 'dark' ? 'rgba(0,0,0,0.7)' : 'rgba(0,0,0,0.35)',
           zIndex: 2000,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center'
         }}>
           <div style={{
-            background: '#fff',
+            background: theme === 'dark' ? '#333' : '#fff',
             borderRadius: 14,
             padding: 32,
             minWidth: 340,
             maxWidth: 480,
-            boxShadow: '0 8px 32px #0004',
+            boxShadow: theme === 'dark' ? '0 8px 32px #0008' : '0 8px 32px #0004',
             textAlign: 'center',
-            position: 'relative'
+            position: 'relative',
+            color: theme === 'dark' ? '#f3f3f3' : '#111',
           }}>
             <div style={{ fontWeight: 700, fontSize: 20, marginBottom: 16 }}>
               Confirmar cambio de estatus
             </div>
-            <div style={{ marginBottom: 18, color: '#333', fontSize: 16 }}>
+            <div style={{ marginBottom: 18, color: theme === 'dark' ? '#ddd' : '#333', fontSize: 16 }}>
               ¿Está seguro de cambiar el estatus a <b style={{ color: '#1976d2' }}>{confirmacion.nuevoEstatus}</b> para la siguiente solicitud?
             </div>
             <div style={{
               textAlign: 'left',
-              background: '#f7fafd',
+              background: theme === 'dark' ? '#424242' : '#f7fafd',
               borderRadius: 8,
               padding: 12,
               fontSize: 14,
               marginBottom: 18,
               maxHeight: 180,
-              overflowY: 'auto'
+              overflowY: 'auto',
+              color: theme === 'dark' ? '#f3f3f3' : '#111',
             }}>
               {confirmacion.solicitud &&
                 Object.entries(confirmacion.solicitud)
@@ -271,7 +275,7 @@ const Admin: React.FC = () => {
                 style={{
                   padding: '10px 28px',
                   borderRadius: 8,
-                  background: '#eee',
+                  background: theme === 'dark' ? '#555' : '#eee',
                   color: '#1976d2',
                   fontWeight: 700,
                   border: 'none',
@@ -534,6 +538,7 @@ const Admin: React.FC = () => {
                 <th key={c.value} style={{ padding: 8 }}>{c.label}</th>
               ))}
               <th style={{ padding: 8 }}>Monto Solicitado</th>
+              <th style={{ padding: 8 }}>Periodo</th> {/* Added header */}
               <th style={{ padding: 8 }}>{camposFiltro.find(c => c.value === 'estatusConfirmacion')?.label}</th>
             </tr>
           </thead>
@@ -546,7 +551,7 @@ const Admin: React.FC = () => {
               else if (clean === 'rechazado') rowBg = '#ffebee';
               else if (clean === 'pendiente') rowBg = '#fffde7';
               return (
-                <tr key={idx + (pagina-1)*porPagina} style={{ background: rowBg, transition: 'background 0.2s' }}>
+                <tr key={idx + (pagina - 1) * porPagina} style={{ background: rowBg, transition: 'background 0.2s' }}>
                   {camposFiltro.filter(c => c.value !== 'estatusConfirmacion').map(c => (
                     <td key={c.value} style={{ padding: 8 }}>{row[c.value]}</td>
                   ))}
@@ -555,6 +560,7 @@ const Admin: React.FC = () => {
                       ? Number(row.montoSubtotal).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
                       : ''}
                   </td>
+                  <td style={{ padding: 8 }}>{row.periodoPresupuesto || 'N/A'}</td> {/* Added data */}
                   <td style={{ padding: 8 }}>
                     <span style={{
                       display: 'inline-block',
@@ -583,7 +589,7 @@ const Admin: React.FC = () => {
                       {/* Mostrar select para cambiar estatus */}
                       <select
                         value={row.estatusConfirmacion || ''}
-                        onChange={e => handleEstatusChange(idx + (pagina-1)*porPagina, e.target.value)}
+                        onChange={e => handleEstatusChange(idx + (pagina - 1) * porPagina, e.target.value)}
                         style={{
                           position: 'absolute',
                           left: 0,
@@ -608,7 +614,7 @@ const Admin: React.FC = () => {
             })}
             {datosPagina.length === 0 && (
               <tr>
-                <td colSpan={camposFiltro.length + 1} style={{ textAlign: 'center', color: '#888', padding: 24 }}>
+                <td colSpan={camposFiltro.length + 2} style={{ textAlign: 'center', color: '#888', padding: 24 }}>
                   No hay resultados.
                 </td>
               </tr>

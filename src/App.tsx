@@ -16,7 +16,15 @@ function App() {
     if (numeroEmpleadoFiltro && baseURL) {
       fetch(`${baseURL}/api/resultados?numeroEmpleado=${encodeURIComponent(numeroEmpleadoFiltro)}`)
         .then(res => res.json())
-        .then(data => setResultados(data || []))
+        .then(data => {
+          const resultadosConCampos = (data || []).map((item: any) => ({
+            ...item,
+            cecos: item.cecos || item.centroCostos || '', // Ensure cecos field is populated
+            periodoPresupuesto: item.periodoPresupuesto || 'N/A', // Default for missing period
+            proveedor: item.proveedor || 'N/A', // Default for missing provider
+          }));
+          setResultados(resultadosConCampos);
+        })
         .catch(() => {
           setResultados([]);
           setErrorMessages(prev => [
@@ -37,6 +45,12 @@ function App() {
         departamento: data.departamento,
         nombre: data.solicitante,
         estatusConfirmacion: 'Pendiente',
+        periodoPresupuesto: data.periodoPresupuesto, // Include Periodo
+        proveedor: data.proveedor, // Include Proveedor
+        categoriaGasto: data.categoriaGasto, // Include Categoria Gasto
+        cuentaGastos: data.cuentaGastos, // Include Cuenta Gastos
+        montoSubtotal: data.montoSubtotal, // Include Monto Subtotal
+        correo: data.correo, // Include Correo
       },
       ...prev
     ]);
