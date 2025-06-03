@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import apiConfig from '../config/apiConfig.json'; // Import the local JSON file directly
+import apiConfig from '../config/apiConfig.json';
 
 interface ResultadosTablaProps {
   data?: any[];
@@ -7,7 +7,7 @@ interface ResultadosTablaProps {
   onOrdenChange?: (campo: string) => void;
   ordenCampo?: string;
   ordenAsc?: boolean;
-  numeroEmpleado?: string; // Nuevo prop para filtrar
+  numeroEmpleado?: string;
 }
 
 const ResultadosTabla: React.FC<ResultadosTablaProps> = ({
@@ -18,22 +18,23 @@ const ResultadosTabla: React.FC<ResultadosTablaProps> = ({
 }) => {
   const [data, setData] = useState<any[]>(propData || []);
   const [pagina, setPagina] = useState(1);
-  const baseURL = apiConfig.baseURL; // Use the baseURL directly from the imported JSON
+  const baseURL = apiConfig.baseURL;
   const porPagina = 10;
 
-  // Function to get background color based on theme and status
   const getRowBg = (estatus: string, idx: number, theme: 'dark' | 'light') => {
     const clean = (estatus || '').trim().toLowerCase();
-    if (clean === 'confirmado') return theme === 'dark' ? '#2e7d32' : '#e8f5e9';
-    if (clean === 'rechazado') return theme === 'dark' ? '#c62828' : '#ffebee';
-    if (clean === 'pendiente') return theme === 'dark' ? '#f57c00' : '#fffde7';
-    return idx % 2 === 0 ? (theme === 'dark' ? '#424242' : '#f7fafd') : (theme === 'dark' ? '#303030' : '#fff');
+    const colors: Record<string, string> = {
+      confirmado: theme === 'dark' ? '#2e7d32' : '#e8f5e9',
+      rechazado: theme === 'dark' ? '#c62828' : '#ffebee',
+      pendiente: theme === 'dark' ? '#f57c00' : '#fffde7',
+    };
+    return colors[clean] || (idx % 2 === 0 ? (theme === 'dark' ? '#424242' : '#f7fafd') : (theme === 'dark' ? '#303030' : '#fff'));
   };
 
-  // Detect theme (light/dark) from the body
   const [theme, setTheme] = useState<'dark' | 'light'>(
     typeof window !== 'undefined' && document.body.classList.contains('dark') ? 'dark' : 'light'
   );
+
   useEffect(() => {
     const observer = new MutationObserver(() => {
       setTheme(document.body.classList.contains('dark') ? 'dark' : 'light');
@@ -44,22 +45,20 @@ const ResultadosTabla: React.FC<ResultadosTablaProps> = ({
 
   useEffect(() => {
     if (!propData && baseURL) {
-      fetch(`${baseURL}/api/resultados`) // Use the baseURL from apiConfig
+      fetch(`${baseURL}/api/resultados`)
         .then(res => res.json())
         .then(apiData => setData(apiData || []))
-        .catch(error => console.error('Error al cargar resultados:', error));
+        .catch(() => {});
     } else {
       setData(propData || []);
     }
     setPagina(1);
   }, [propData, baseURL]);
 
-  // Filtrado por número de empleado si está activo (desde prop)
   const dataFiltrada = numeroEmpleado
     ? data.filter(row => (row.numeroEmpleado || '').toString().includes(numeroEmpleado))
     : data;
 
-  // Ordena los datos por fecha descendente (más reciente primero)
   const dataOrdenada = [...dataFiltrada].sort((a, b) => {
     if (a.Fecha && b.Fecha) {
       return new Date(b.Fecha).getTime() - new Date(a.Fecha).getTime();
@@ -70,27 +69,22 @@ const ResultadosTabla: React.FC<ResultadosTablaProps> = ({
   const totalPaginas = Math.ceil(dataOrdenada.length / porPagina);
   const datosPagina = dataOrdenada.slice((pagina - 1) * porPagina, pagina * porPagina);
 
-  // Helper to render sortable headers
-  function renderHeader(label: string, campo: string) {
-    return (
-      <th
-        style={{
-          padding: 10,
-          cursor: 'pointer',
-          userSelect: 'none',
-          textAlign: 'left',
-          color: ordenCampo === campo ? (ordenAsc ? '#1976d2' : '#d32f2f') : 'inherit',
-        }}
-      >
-        {label}
-        {ordenCampo === campo && (
-          <span style={{ marginLeft: 4 }}>
-            {ordenAsc ? '⬆️' : '⬇️'}
-          </span>
-        )}
-      </th>
-    );
-  }
+  const renderHeader = (label: string, campo: string) => (
+    <th
+      style={{
+        padding: 10,
+        cursor: 'pointer',
+        userSelect: 'none',
+        textAlign: 'left',
+        color: ordenCampo === campo ? (ordenAsc ? '#1976d2' : '#d32f2f') : 'inherit',
+      }}
+    >
+      {label}
+      {ordenCampo === campo && (
+        <span style={{ marginLeft: 4 }}>{ordenAsc ? '▲' : '▼'}</span>
+      )}
+    </th>
+  );
 
   return (
     <div
@@ -135,8 +129,8 @@ const ResultadosTabla: React.FC<ResultadosTablaProps> = ({
               {renderHeader('SubDepartamento', 'subDepartamento')}
               {renderHeader('Categoría Gasto', 'categoriaGasto')}
               {renderHeader('Cuenta Gastos', 'cuentaGastos')}
-              {renderHeader('Proveedor', 'proveedor')} {/* Nueva columna */}
-              {renderHeader('Periodo Presupuesto', 'periodoPresupuesto')} {/* Corrección del nombre */}
+              {renderHeader('Proveedor', 'proveedor')}
+              {renderHeader('Periodo Presupuesto', 'periodoPresupuesto')}
               {renderHeader('Monto Solicitado', 'montoSubtotal')}
               {renderHeader('Estatus Confirmación', 'estatusConfirmacion')}
               {renderHeader('Fecha', 'Fecha')}
@@ -158,8 +152,8 @@ const ResultadosTabla: React.FC<ResultadosTablaProps> = ({
                     <td style={{ padding: 8, color: '#111' }}>{row.subDepartamento}</td>
                     <td style={{ padding: 8, color: '#111' }}>{row.categoriaGasto}</td>
                     <td style={{ padding: 8, color: '#111' }}>{row.cuentaGastos}</td>
-                    <td style={{ padding: 8, color: '#111' }}>{row.proveedor}</td> {/* Nueva columna */}
-                    <td style={{ padding: 8, color: '#111' }}>{row.periodoPresupuesto}</td> {/* Corrección del nombre */}
+                    <td style={{ padding: 8, color: '#111' }}>{row.proveedor}</td>
+                    <td style={{ padding: 8, color: '#111' }}>{row.periodoPresupuesto}</td>
                     <td style={{ textAlign: 'right', padding: 8, fontWeight: 500, color: '#111' }}>
                       {row.montoSubtotal !== undefined && row.montoSubtotal !== null && row.montoSubtotal !== ''
                         ? Number(row.montoSubtotal).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
@@ -224,7 +218,6 @@ const ResultadosTabla: React.FC<ResultadosTablaProps> = ({
           </tbody>
         </table>
       </div>
-      {/* Paginación */}
       {totalPaginas > 1 && (
         <div style={{ display: 'flex', justifyContent: 'center', marginTop: 18, gap: 8 }}>
           <button

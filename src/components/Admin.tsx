@@ -1,7 +1,12 @@
-import React, { useEffect, useState } from 'react';
-import apiConfig from '../config/apiConfig.json'; // Import the local JSON file directly
+import React, { useEffect, useState, useMemo } from 'react';
+import apiConfig from '../config/apiConfig.json';
 
 interface Solicitud {
+  id?: string;
+  numeroEmpleado?: string;
+  estatusConfirmacion?: string;
+  montoSubtotal?: number;
+  Fecha?: string;
   [key: string]: any;
 }
 
@@ -13,7 +18,7 @@ const camposFiltro = [
   { label: 'SubDepartamento', value: 'subDepartamento' },
   { label: 'Categoría Gasto', value: 'categoriaGasto' },
   { label: 'Cuenta Gastos', value: 'cuentaGastos' },
-  { label: 'Periodo', value: 'periodoPresupuesto' }, // Added filter
+  { label: 'Periodo', value: 'periodoPresupuesto' },
   { label: 'Estatus', value: 'estatusConfirmacion' },
   { label: 'Fecha', value: 'Fecha' },
 ];
@@ -22,35 +27,88 @@ const estatusOpciones = ['Pendiente', 'Confirmado', 'Rechazado'];
 
 const Admin: React.FC = () => {
   const [solicitudes, setSolicitudes] = useState<Solicitud[]>([]);
-  const baseURL = apiConfig.baseURL; // Use the baseURL directly from the imported JSON
-  const [campoFiltro, setCampoFiltro] = useState<string>('solicitante');
+  const baseURL = apiConfig.baseURL;
+  const [filtrosCampos, setFiltrosCampos] = useState<Record<string, string[]>>({});
+  const [filtroEstatus, setFiltroEstatus] = useState<string>('');
   const [valorFiltro, setValorFiltro] = useState<string>('');
-  const [filtroEstatus, setFiltroEstatus] = useState<string>(''); // Filtro separado para estatus
-  const [filtrosCampos, setFiltrosCampos] = useState<{[campo: string]: string[]}>({}); // Múltiples filtros por campo
+  const [campoFiltro, setCampoFiltro] = useState<string>('solicitante');
+  const [pagina, setPagina] = useState(1);
+  const porPagina = 10;
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
 
-  const [username, setUsername] = useState<string>('');
-  const [password, setPassword] = useState<string>('');
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
+  const totalPaginas = useMemo(() => {
+    return Math.ceil(solicitudes.length / porPagina);
+  }, [solicitudes, porPagina]);
 
   useEffect(() => {
-    const loggedIn = localStorage.getItem('isLoggedIn');
-    if (loggedIn === 'true') {
+    const storedLoginState = localStorage.getItem('isLoggedIn');
+    if (storedLoginState === 'true') {
       setIsLoggedIn(true);
     }
   }, []);
 
   useEffect(() => {
     if (baseURL) {
-      fetch(`${baseURL}/api/resultados`) // Use the baseURL from apiConfig
+      fetch(`${baseURL}/api/resultados`)
         .then(res => res.json())
-        .then(data => setSolicitudes(data || []))
-        .catch(error => console.error('Error al cargar resultados:', error));
+        .then(data => setSolicitudes(data || []));
     }
   }, [baseURL]);
 
-  const handleFiltroChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    if (e.target.name === 'campoFiltro') setCampoFiltro(e.target.value);
-    else setValorFiltro(e.target.value);
+  const handleLogin = async () => {
+    if (username && password) {
+      try {
+        const response = await fetch(`${baseURL}/api/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          const errorMessage = errorData?.message || response.statusText;
+          const errorDiv = document.createElement('div');
+          errorDiv.style.position = 'fixed';
+          errorDiv.style.top = '20px';
+          errorDiv.style.right = '20px';
+          errorDiv.style.padding = '16px';
+          errorDiv.style.backgroundColor = '#e57373';
+          errorDiv.style.color = '#fff';
+          errorDiv.style.borderRadius = '8px';
+          errorDiv.style.boxShadow = '0 2px 12px rgba(0, 0, 0, 0.2)';
+          errorDiv.style.fontSize = '14px';
+          errorDiv.style.zIndex = '1000';
+          errorDiv.textContent = `Error en el login: ${errorMessage}`;
+          document.body.appendChild(errorDiv);
+          setTimeout(() => {
+            document.body.removeChild(errorDiv);
+          }, 5000);
+        } else {
+          setIsLoggedIn(true);
+          localStorage.setItem('isLoggedIn', 'true');
+        }
+      } catch (error) {
+        const errorMessage = typeof error === 'object' && error !== null && 'message' in error ? error.message : error;
+        const errorDiv = document.createElement('div');
+        errorDiv.style.position = 'fixed';
+        errorDiv.style.top = '20px';
+        errorDiv.style.right = '20px';
+        errorDiv.style.padding = '16px';
+        errorDiv.style.backgroundColor = '#e57373';
+        errorDiv.style.color = '#fff';
+        errorDiv.style.borderRadius = '8px';
+        errorDiv.style.boxShadow = '0 2px 12px rgba(0, 0, 0, 0.2)';
+        errorDiv.style.fontSize = '14px';
+        errorDiv.style.zIndex = '1000';
+        errorDiv.textContent = `Error en la petición de login: ${errorMessage}`;
+        document.body.appendChild(errorDiv);
+        setTimeout(() => {
+          document.body.removeChild(errorDiv);
+        }, 5000);
+      }
+    }
   };
 
   const agregarFiltro = () => {
@@ -60,7 +118,7 @@ const Admin: React.FC = () => {
         if (!arr.includes(valorFiltro)) {
           return {
             ...prev,
-            [campoFiltro]: [...arr, valorFiltro]
+            [campoFiltro]: [...arr, valorFiltro],
           };
         }
         return prev;
@@ -89,134 +147,123 @@ const Admin: React.FC = () => {
     setValorFiltro('');
   };
 
-  const solicitudesFiltradas = solicitudes.filter(s => {
-    // Filtro por estatus (botones)
-    let pasaEstatus = true;
-    if (filtroEstatus) {
-      pasaEstatus = (s.estatusConfirmacion || '').toLowerCase() === filtroEstatus.toLowerCase();
-    }
-    
-    // Filtros múltiples por campos
-    let pasaFiltrosCampos = true;
-    Object.entries(filtrosCampos).forEach(([campo, valores]) => {
-      if (valores && valores.length > 0) {
-        const val = (s[campo] || '').toString().toLowerCase();
-        if (!valores.some(v => val.includes(v.toLowerCase()))) {
-          pasaFiltrosCampos = false;
-        }
+  const solicitudesFiltradas = useMemo(() => {
+    return solicitudes.filter(s => {
+      let pasaEstatus = true;
+      if (filtroEstatus) {
+        pasaEstatus = (s.estatusConfirmacion || '').toLowerCase() === filtroEstatus.toLowerCase();
       }
+
+      let pasaFiltrosCampos = true;
+      Object.entries(filtrosCampos).forEach(([campo, valores]) => {
+        if (valores && valores.length > 0) {
+          const val = (s[campo] || '').toString().toLowerCase();
+          if (!valores.some(v => val.includes(v.toLowerCase()))) {
+            pasaFiltrosCampos = false;
+          }
+        }
+      });
+
+      return pasaEstatus && pasaFiltrosCampos;
     });
-    
-    // Filtro de texto temporal (para agregar nuevos filtros)
-    let pasaFiltroTexto = true;
-    if (valorFiltro && campoFiltro) {
-      const val = (s[campoFiltro] || '').toString().toLowerCase();
-      pasaFiltroTexto = val.includes(valorFiltro.toLowerCase());
-    }
-    
-    return pasaEstatus && pasaFiltrosCampos && pasaFiltroTexto;
-  });
+  }, [solicitudes, filtroEstatus, filtrosCampos]);
 
-  // Ordenar por fecha descendente (más reciente primero)
-  const solicitudesFiltradasOrdenadas = [...solicitudesFiltradas].sort((a, b) => {
-    if (a.Fecha && b.Fecha) {
-      return new Date(b.Fecha).getTime() - new Date(a.Fecha).getTime();
-    }
-    return 0;
-  });
+  const solicitudesFiltradasOrdenadas = useMemo(() => {
+    return [...solicitudesFiltradas].sort((a, b) => {
+      if (a.Fecha && b.Fecha) {
+        return new Date(b.Fecha).getTime() - new Date(a.Fecha).getTime();
+      }
+      return 0;
+    });
+  }, [solicitudesFiltradas]);
 
-  // Paginación
-  const porPagina = 10;
-  const [pagina, setPagina] = useState(1);
-  const totalPaginas = Math.ceil(solicitudesFiltradasOrdenadas.length / porPagina);
-  const datosPagina = solicitudesFiltradasOrdenadas.slice((pagina - 1) * porPagina, pagina * porPagina);
+  const datosPagina = useMemo(() => {
+    return solicitudesFiltradasOrdenadas.slice((pagina - 1) * porPagina, pagina * porPagina);
+  }, [solicitudesFiltradasOrdenadas, pagina]);
+
   useEffect(() => {
-    setPagina(1); // Reinicia a la primera página si cambia el filtro
-  }, [campoFiltro, valorFiltro, filtroEstatus, filtrosCampos, solicitudes]);
+    setPagina(1);
+  }, [filtrosCampos, filtroEstatus, solicitudes]);
+
+  const handleFiltroChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    if (name === 'campoFiltro') setCampoFiltro(value);
+    else setValorFiltro(value);
+  };
 
   const handleEstatusChange = (idx: number, nuevoEstatus: string) => {
     const solicitud = datosPagina[idx];
     if (!solicitud) return;
 
-    // Actualizar directamente el estado sin mostrar ventana de confirmación
-    const actualizadas = solicitudes.map(s =>
-      s === solicitud ? { ...s, estatusConfirmacion: nuevoEstatus } : s
-    );
-    setSolicitudes(actualizadas);
-
     if (baseURL) {
-      fetch(`${baseURL}/api/editar-estatus`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: solicitud.id || solicitud.numeroEmpleado,
-          estatusConfirmacion: nuevoEstatus,
-          solicitud: { ...solicitud, estatusConfirmacion: nuevoEstatus }
-        }),
-      })
-      .then(response => {
-        if (!response.ok) {
-          console.error('Error al actualizar el estatus', response.statusText);
-        }
-        return response.json();
-      })
-      .catch(error => {
-        console.error('Error en la petición:', error);
-      });
-    }
-  };
-
-  // Detectar tema (light/dark) desde el body
-  const [theme, setTheme] = useState<'dark' | 'light'>(
-    typeof window !== 'undefined' && document.body.classList.contains('dark') ? 'dark' : 'light'
-  );
-  useEffect(() => {
-    const observer = new MutationObserver(() => {
-      setTheme(document.body.classList.contains('dark') ? 'dark' : 'light');
-    });
-    observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
-    return () => observer.disconnect();
-  }, []);
-
-  const handleLogin = () => {
-    if (username === 'admin' && password === 'admin123') {
-      setIsLoggedIn(true);
-      localStorage.setItem('isLoggedIn', 'true');
-    } else {
-      alert('Usuario o contraseña incorrectos');
+        fetch(`${baseURL}/api/editar-estatus`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ estatusConfirmacion: nuevoEstatus, solicitud }),
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(errorData => {
+                    const errorMessage = errorData?.message || response.statusText;
+                    alert(`Error en la petición: ${errorMessage}`);
+                });
+            } else {
+                const actualizadas = solicitudes.map(s =>
+                  s === solicitud ? { ...s, estatusConfirmacion: nuevoEstatus } : s
+                );
+                setSolicitudes(actualizadas);
+            }
+        })
+        .catch(error => {
+            const errorMessage = typeof error === 'object' && error !== null && 'message' in error ? error.message : error;
+            alert(`Error en la petición: ${errorMessage}`);
+        });
     }
   };
 
   return (
-    <div style={{
-      maxWidth: 1100,
-      margin: '2rem auto',
-      padding: 24,
-      position: 'relative',
-      background: theme === 'dark' ? '#232323' : '#fff',
-      color: theme === 'dark' ? '#f3f3f3' : '#111',
-      borderRadius: 18,
-      boxShadow: theme === 'dark' ? '0 4px 24px #0006' : '0 4px 24px #0002',
-    }}>
+    <div style={{ maxWidth: 1100, margin: '2rem auto', padding: 24 }}>
       {/* Login Form */}
       {!isLoggedIn && (
-        <div style={{ marginBottom: 24 }}>
-          <h3>Login</h3>
+        <div style={{
+          marginBottom: 24,
+          padding: 24,
+          borderRadius: 16,
+          background: '#f4f6fb',
+          boxShadow: '0 4px 24px #0002',
+          textAlign: 'center',
+        }}>
+          <img
+            src="https://www.circulodecredito.com.mx/documents/10588964/0/cdc-logo-negro.svg"
+            alt="Logo"
+            style={{ width: 100, marginBottom: 16 }}
+          />
+          <h3 style={{ color: '#1976d2', fontWeight: 600 }}>Login</h3>
           <input
             type="text"
             placeholder="Usuario"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            style={{ marginBottom: 8, padding: 8, width: '100%' }}
+            style={{ marginBottom: 8, padding: 8, width: '100%', borderRadius: 6, border: '1px solid #cfd8dc' }}
           />
           <input
             type="password"
             placeholder="Contraseña"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            style={{ marginBottom: 8, padding: 8, width: '100%' }}
+            style={{ marginBottom: 8, padding: 8, width: '100%', borderRadius: 6, border: '1px solid #cfd8dc' }}
           />
-          <button onClick={handleLogin} style={{ padding: 8, backgroundColor: '#1976d2', color: '#fff', border: 'none', borderRadius: 4 }}>
+          <button
+            onClick={handleLogin}
+            style={{
+              padding: 8,
+              backgroundColor: '#1976d2',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 4,
+              cursor: 'pointer',
+            }}
+          >
             Iniciar Sesión
           </button>
         </div>
@@ -316,12 +363,11 @@ const Admin: React.FC = () => {
                 style={{
                   padding: 8,
                   borderRadius: 6,
-                  border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc',
+                  border: '1px solid #cfd8dc',
                   minWidth: 150,
-                  color: theme === 'dark' ? '#f3f3f3' : '#111',
-                  background: theme === 'dark' ? '#333' : '#fff'
+                  color: '#111',
+                  background: '#fff'
                 }}
-                className={theme === 'dark' ? 'select-dark-placeholder' : 'select-light-placeholder'}
               >
                 {camposFiltro.filter(c => c.value !== 'estatusConfirmacion').map(c => (
                   <option key={c.value} value={c.value}>{c.label}</option>
@@ -336,11 +382,10 @@ const Admin: React.FC = () => {
                   flex: 1,
                   padding: 8,
                   borderRadius: 6,
-                  border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc',
-                  color: theme === 'dark' ? '#f3f3f3' : '#111',
-                  background: theme === 'dark' ? '#333' : '#fff'
+                  border: '1px solid #cfd8dc',
+                  color: '#111',
+                  background: '#fff'
                 }}
-                className={theme === 'dark' ? 'input-dark-placeholder' : 'input-light-placeholder'}
                 onKeyDown={e => { if (e.key === 'Enter') agregarFiltro(); }}
               />
               <button
@@ -367,9 +412,9 @@ const Admin: React.FC = () => {
                   style={{
                     padding: '8px 12px',
                     borderRadius: 6,
-                    border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc',
-                    background: theme === 'dark' ? '#333' : '#f5f5f5',
-                    color: theme === 'dark' ? '#f3f3f3' : '#666',
+                    border: '1px solid #cfd8dc',
+                    background: '#f5f5f5',
+                    color: '#666',
                     cursor: 'pointer',
                     fontSize: 14
                   }}
@@ -490,12 +535,12 @@ const Admin: React.FC = () => {
                         {camposFiltro.filter(c => c.value !== 'estatusConfirmacion').map(c => (
                           <td key={c.value} style={{ padding: 8 }}>
                             {c.value === 'Fecha' && row[c.value]
-                              ? new Date(row[c.value]).toLocaleDateString('es-MX')
+                              ? new Date(row[c.value] ?? '').toLocaleDateString('es-MX')
                               : row[c.value]}
                           </td>
                         ))}
                         <td style={{ textAlign: 'right', padding: 8, fontWeight: 500 }}>
-                          {row.montoSubtotal !== undefined && row.montoSubtotal !== null && row.montoSubtotal !== ''
+                          {typeof row.montoSubtotal === 'number' && row.montoSubtotal !== null
                             ? Number(row.montoSubtotal).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
                             : ''}
                         </td>
@@ -573,15 +618,15 @@ const Admin: React.FC = () => {
                 style={{
                   padding: '6px 14px',
                   borderRadius: 6,
-                  border: theme === 'dark' ? '1px solid #444' : '1px solid #bdbdbd',
-                  background: pagina === 1 ? (theme === 'dark' ? '#444' : '#eee') : (theme === 'dark' ? '#333' : '#fff'),
+                  border: '1px solid #bdbdbd',
+                  background: pagina === 1 ? '#eee' : '#fff',
                   cursor: pagina === 1 ? 'not-allowed' : 'pointer',
-                  color: theme === 'dark' ? '#f3f3f3' : '#111'
+                  color: '#111'
                 }}
               >
                 Anterior
               </button>
-              <span style={{ alignSelf: 'center', fontWeight: 500, color: theme === 'dark' ? '#f3f3f3' : '#111' }}>
+              <span style={{ alignSelf: 'center', fontWeight: 500, color: '#111' }}>
                 Página {pagina} de {totalPaginas}
               </span>
               <button
@@ -590,10 +635,10 @@ const Admin: React.FC = () => {
                 style={{
                   padding: '6px 14px',
                   borderRadius: 6,
-                  border: theme === 'dark' ? '1px solid #444' : '1px solid #bdbdbd',
-                  background: pagina === totalPaginas ? (theme === 'dark' ? '#444' : '#eee') : (theme === 'dark' ? '#333' : '#fff'),
+                  border: '1px solid #bdbdbd',
+                  background: pagina === totalPaginas ? '#eee' : '#fff',
                   cursor: pagina === totalPaginas ? 'not-allowed' : 'pointer',
-                  color: theme === 'dark' ? '#f3f3f3' : '#111'
+                  color: '#111'
                 }}
               >
                 Siguiente
