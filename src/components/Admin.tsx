@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import apiConfig from '../config/apiConfig.json';
+import { fetchResultados, editarEstatusSolicitud } from '../services';
 
 interface Solicitud {
   id?: string;
@@ -27,89 +27,21 @@ const estatusOpciones = ['Pendiente', 'Confirmado', 'Rechazado'];
 
 const Admin: React.FC = () => {
   const [solicitudes, setSolicitudes] = useState<Solicitud[]>([]);
-  const baseURL = apiConfig.baseURL;
   const [filtrosCampos, setFiltrosCampos] = useState<Record<string, string[]>>({});
   const [filtroEstatus, setFiltroEstatus] = useState<string>('');
   const [valorFiltro, setValorFiltro] = useState<string>('');
   const [campoFiltro, setCampoFiltro] = useState<string>('solicitante');
   const [pagina, setPagina] = useState(1);
   const porPagina = 10;
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
 
   const totalPaginas = useMemo(() => {
     return Math.ceil(solicitudes.length / porPagina);
   }, [solicitudes, porPagina]);
 
   useEffect(() => {
-    const storedLoginState = localStorage.getItem('isLoggedIn');
-    if (storedLoginState === 'true') {
-      setIsLoggedIn(true);
-    }
+    fetchResultados()
+      .then(data => setSolicitudes(data || []));
   }, []);
-
-  useEffect(() => {
-    if (baseURL) {
-      fetch(`${baseURL}/api/resultados`)
-        .then(res => res.json())
-        .then(data => setSolicitudes(data || []));
-    }
-  }, [baseURL]);
-
-  const handleLogin = async () => {
-    if (username && password) {
-      try {
-        const response = await fetch(`${baseURL}/api/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password }),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          const errorMessage = errorData?.message || response.statusText;
-          const errorDiv = document.createElement('div');
-          errorDiv.style.position = 'fixed';
-          errorDiv.style.top = '20px';
-          errorDiv.style.right = '20px';
-          errorDiv.style.padding = '16px';
-          errorDiv.style.backgroundColor = '#e57373';
-          errorDiv.style.color = '#fff';
-          errorDiv.style.borderRadius = '8px';
-          errorDiv.style.boxShadow = '0 2px 12px rgba(0, 0, 0, 0.2)';
-          errorDiv.style.fontSize = '14px';
-          errorDiv.style.zIndex = '1000';
-          errorDiv.textContent = `Error en el login: ${errorMessage}`;
-          document.body.appendChild(errorDiv);
-          setTimeout(() => {
-            document.body.removeChild(errorDiv);
-          }, 5000);
-        } else {
-          setIsLoggedIn(true);
-          localStorage.setItem('isLoggedIn', 'true');
-        }
-      } catch (error) {
-        const errorMessage = typeof error === 'object' && error !== null && 'message' in error ? error.message : error;
-        const errorDiv = document.createElement('div');
-        errorDiv.style.position = 'fixed';
-        errorDiv.style.top = '20px';
-        errorDiv.style.right = '20px';
-        errorDiv.style.padding = '16px';
-        errorDiv.style.backgroundColor = '#e57373';
-        errorDiv.style.color = '#fff';
-        errorDiv.style.borderRadius = '8px';
-        errorDiv.style.boxShadow = '0 2px 12px rgba(0, 0, 0, 0.2)';
-        errorDiv.style.fontSize = '14px';
-        errorDiv.style.zIndex = '1000';
-        errorDiv.textContent = `Error en la petición de login: ${errorMessage}`;
-        document.body.appendChild(errorDiv);
-        setTimeout(() => {
-          document.body.removeChild(errorDiv);
-        }, 5000);
-      }
-    }
-  };
 
   const agregarFiltro = () => {
     if (valorFiltro && campoFiltro) {
@@ -195,82 +127,27 @@ const Admin: React.FC = () => {
     const solicitud = datosPagina[idx];
     if (!solicitud) return;
 
-    if (baseURL) {
-        fetch(`${baseURL}/api/editar-estatus`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ estatusConfirmacion: nuevoEstatus, solicitud }),
-        })
-        .then(response => {
-            if (!response.ok) {
-                return response.json().then(errorData => {
-                    const errorMessage = errorData?.message || response.statusText;
-                    alert(`Error en la petición: ${errorMessage}`);
-                });
-            } else {
-                const actualizadas = solicitudes.map(s =>
-                  s === solicitud ? { ...s, estatusConfirmacion: nuevoEstatus } : s
-                );
-                setSolicitudes(actualizadas);
-            }
-        })
-        .catch(error => {
-            const errorMessage = typeof error === 'object' && error !== null && 'message' in error ? error.message : error;
-            alert(`Error en la petición: ${errorMessage}`);
-        });
-    }
+    editarEstatusSolicitud(nuevoEstatus, solicitud)
+      .then(response => {
+        if (!response || response?.error) {
+          alert(`Error en la petición: ${response?.error || 'Error desconocido'}`);
+        } else {
+          const actualizadas = solicitudes.map(s =>
+            s === solicitud ? { ...s, estatusConfirmacion: nuevoEstatus } : s
+          );
+          setSolicitudes(actualizadas);
+        }
+      })
+      .catch(error => {
+        const errorMessage = typeof error === 'object' && error !== null && 'message' in error ? error.message : error;
+        alert(`Error en la petición: ${errorMessage}`);
+      });
   };
 
   return (
     <div style={{ maxWidth: 1100, margin: '2rem auto', padding: 24 }}>
-      {/* Login Form */}
-      {!isLoggedIn && (
-        <div style={{
-          marginBottom: 24,
-          padding: 24,
-          borderRadius: 16,
-          background: '#f4f6fb',
-          boxShadow: '0 4px 24px #0002',
-          textAlign: 'center',
-        }}>
-          <img
-            src="https://www.circulodecredito.com.mx/documents/10588964/0/cdc-logo-negro.svg"
-            alt="Logo"
-            style={{ width: 100, marginBottom: 16 }}
-          />
-          <h3 style={{ color: '#1976d2', fontWeight: 600 }}>Login</h3>
-          <input
-            type="text"
-            placeholder="Usuario"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            style={{ marginBottom: 8, padding: 8, width: '100%', borderRadius: 6, border: '1px solid #cfd8dc' }}
-          />
-          <input
-            type="password"
-            placeholder="Contraseña"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            style={{ marginBottom: 8, padding: 8, width: '100%', borderRadius: 6, border: '1px solid #cfd8dc' }}
-          />
-          <button
-            onClick={handleLogin}
-            style={{
-              padding: 8,
-              backgroundColor: '#1976d2',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 4,
-              cursor: 'pointer',
-            }}
-          >
-            Iniciar Sesión
-          </button>
-        </div>
-      )}
-
-      {/* Content only visible after login */}
-      {isLoggedIn && (
+      
+      {(
         <>
           <h2>Administrador de Solicitudes</h2>
           
@@ -316,7 +193,7 @@ const Admin: React.FC = () => {
                 if (filtroEstatus === e) {
                   if (e === 'Confirmado') { bg = '#43a047'; color = '#fff'; shadow = '0 1px 4px #43a047'; }
                   else if (e === 'Rechazado') { bg = '#e57373'; color = '#fff'; shadow = '0 1px 4px #e57373'; }
-                  else if (e === 'Pendiente') { bg = '#ffe082'; color = '#a15c00'; shadow = '0 1px 4px #ffe082'; }
+                  else if (e === 'Pendiente') { shadow = '0 1px 4px #ffe082'; }
                 }
                 return (
                   <button

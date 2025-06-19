@@ -1,5 +1,11 @@
 import React, { useEffect, useState, useRef } from 'react';
-import apiConfig from '../config/apiConfig.json'; // Import the local JSON file directly
+import {
+  fetchDepartamentos,
+  fetchCategoriasGasto,
+  fetchProveedores,
+  fetchSolicitanteByNumeroEmpleado,
+  guardarPresupuesto
+} from '../services';
 
 interface Option {
   value: string;
@@ -34,6 +40,143 @@ const initialForm: FormData = {
   correo: '',
 };
 
+// Helper hooks and functions extracted for clarity and reduced complexity
+
+function usePeriodos() {
+  const [periodos, setPeriodos] = useState<string[]>([]);
+  useEffect(() => {
+    const currentYear = new Date().getFullYear();
+    const months = [
+      'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+      'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+    ];
+    setPeriodos(months.map(month => `${month} ${currentYear}`));
+  }, []);
+  return periodos;
+}
+
+function useDepartamentos(setDepartamentosData: (data: any[]) => void, setDepartamentos: (opts: Option[]) => void) {
+  useEffect(() => {
+    fetchDepartamentos()
+      .then((data: any[]) => {
+        setDepartamentosData(data || []);
+        setDepartamentos(
+          (data || []).map((dep: any) => {
+            let nombreDep = dep.departamento ?? dep.Departamento ?? dep.Area ?? dep.area ?? '';
+            if (nombreDep.includes(' : ')) {
+              nombreDep = nombreDep.split(' : ')[0].trim();
+            }
+            return {
+              value: String(nombreDep),
+              label: nombreDep
+            };
+          })
+        );
+      })
+      .catch((error) => console.error("Error al cargar departamentos:", error));
+  }, [setDepartamentosData, setDepartamentos]);
+}
+
+function useCategorias(setCategorias: (opts: Option[]) => void, setCategoriasFiltradas: (opts: Option[]) => void) {
+  useEffect(() => {
+    fetchCategoriasGasto()
+      .then((data: any[]) => {
+        const categoriasData = (data || []).map((d: any) => ({
+          value: String(d.cuenta || d.Cuenta || ''),
+          label: d['Cuenta de gastos'] || '',
+        }));
+        setCategorias(categoriasData);
+        setCategoriasFiltradas(
+          categoriasData.filter((categoria: Option, index: number, self: Option[]) =>
+            index === self.findIndex((c: Option) => c.label === categoria.label)
+          )
+        );
+      })
+      .catch((error) => console.error("Error al cargar categorías de gasto:", error));
+  }, [setCategorias, setCategoriasFiltradas]);
+}
+
+function useProveedores(setProveedores: (opts: Option[]) => void) {
+  useEffect(() => {
+    fetchProveedores()
+      .then((data: any[]) => {
+        const lista = (data || []).map((d: any) => ({
+          value: String(d.Nombre || '').trim(),
+          label: String(d.Nombre || '').trim(),
+          numeroEmpleado: d['Número Proveedor'] || '',
+          cuentaGastos: (d.CuentasGasto || []).join(', '),
+          categoriaGasto: d.Categoría || '',
+        }));
+        setProveedores(lista);
+      })
+      .catch((error) => console.error("Error al cargar proveedores:", error));
+  }, [setProveedores]);
+}
+
+function getCentroCostosFromSubDepartamento(subDepartamento: string) {
+  let centroCostos = '';
+  if (subDepartamento && subDepartamento.trim()) {
+    const match = subDepartamento.match(/^([A-Z0-9]+)[\s\-_]+/);
+    if (match && match[1] && match[1].trim()) {
+      centroCostos = match[1].trim();
+    } else {
+      const partes = subDepartamento.split(/[\s\-_]+/);
+      if (partes.length > 0 && partes[0] && partes[0].trim()) {
+        centroCostos = partes[0].trim();
+      }
+    }
+  }
+  return centroCostos;
+}
+
+function parseEmpleadoData(data: any) {
+  // Extraer nombre del solicitante
+  const nombre = data?.Nombre ?? data?.nombre ?? '';
+  // Extraer correo electrónico
+  const correo = data?.['Correo electrónico'] ?? data?.correo ?? '';
+  // Procesar departamento y subdepartamento
+  let departamento = '';
+  let subDepartamento = '';
+  let centroCostosCalculado = '';
+  const deptStr = data?.Departamento ?? data?.departamento ?? '';
+  if (deptStr) {
+    const deptParts = deptStr.split(' : ');
+    if (deptParts.length > 1) {
+      departamento = deptParts[0].trim();
+      const subPartsInput = deptParts[1].trim();
+      const match = subPartsInput.match(/^(\d+)-(.+)$/);
+      if (match) {
+        centroCostosCalculado = match[1].trim();
+        subDepartamento = match[2].trim();
+      } else {
+        const subParts = subPartsInput.split('-');
+        if (subParts.length > 1) {
+          centroCostosCalculado = subParts[0].trim();
+          subDepartamento = subParts.slice(1).join('-').trim();
+        } else {
+          subDepartamento = subPartsInput;
+        }
+      }
+    } else {
+      departamento = deptStr;
+    }
+  }
+  if (!centroCostosCalculado && subDepartamento) {
+    centroCostosCalculado = getCentroCostosFromSubDepartamento(subDepartamento);
+  }
+  if (!centroCostosCalculado) {
+    centroCostosCalculado = data?.centroCostos || data?.['Centro de costos'] || '';
+  }
+  return {
+    nombre,
+    correo,
+    departamento,
+    subDepartamento,
+    centroCostos: centroCostosCalculado,
+    empresa: data?.Subsidiaria ?? data?.subsidiaria ?? data?.empresa ?? ''
+  };
+}
+
 const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumeroEmpleadoChange?: (numeroEmpleado: string) => void }> = ({ onSubmit, onNumeroEmpleadoChange }) => {
   const [form, setForm] = useState<FormData>(initialForm);
   const [departamentos, setDepartamentos] = useState<Option[]>([]);
@@ -51,106 +194,24 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
   const errorTimeoutsRef = useRef<{ [id: number]: ReturnType<typeof setTimeout> }>({});
   const nextErrorId = useRef(1);
   const [numEmpleadoTimeout, setNumEmpleadoTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
-
-  const baseURL = apiConfig.baseURL; // Use the baseURL directly from the imported JSON
-
+  const periodos = usePeriodos();
   const [periodoPresupuesto, setPeriodoPresupuesto] = useState<string>('');
-  const [periodos, setPeriodos] = useState<string[]>([]);
 
-  useEffect(() => {
-    const currentYear = new Date().getFullYear();
-    const months = [
-      'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-      'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
-    ];
-    setPeriodos(months.map(month => `${month} ${currentYear}`));
-  }, []);
+  useDepartamentos(setDepartamentosData, setDepartamentos);
+  useCategorias(setCategorias, setCategoriasFiltradas);
+  useProveedores(setProveedores);
 
-  const fetchData = async (url: string, onSuccess: (data: any) => void, onError: (error: any) => void) => {
-    try {
-      const response = await fetch(url);
-      const data = await response.json();
-      onSuccess(data);
-    } catch (error) {
-      onError(error);
-    }
-  };
-
-  useEffect(() => {
-    if (baseURL) {
-      fetchData(
-        `${baseURL}/api/departamentos`,
-        (data: any[]) => {
-          setDepartamentosData(data || []);
-          setDepartamentos(
-            (data || []).map((dep: any) => {
-              let nombreDep = dep.departamento || dep.Departamento || dep.Area || dep.area || '';
-              if (nombreDep.includes(' : ')) {
-                nombreDep = nombreDep.split(' : ')[0].trim();
-              }
-              return {
-                value: String(nombreDep),
-                label: nombreDep
-              };
-            })
-          );
-        },
-        (error) => console.error("Error al cargar departamentos:", error)
-      );
-
-      fetchData(
-        `${baseURL}/api/categorias-gasto`,
-        (data: any[]) => {
-          const categoriasData = (data || []).map((d: any) => ({
-            value: String(d.cuenta || d.Cuenta || ''),
-            label: d['Cuenta de gastos'] || '',
-          }));
-          setCategorias(categoriasData);
-          setCategoriasFiltradas(
-            categoriasData.filter((categoria: Option, index: number, self: Option[]) =>
-              index === self.findIndex((c: Option) => c.label === categoria.label)
-            )
-          );
-        },
-        (error) => console.error("Error al cargar categorías de gasto:", error)
-      );
-
-      fetchData(
-        `${baseURL}/api/proveedores`,
-        (data: any[]) => {
-          const lista = (data || []).map((d: any) => ({
-            value: String(d.Nombre || '').trim(),
-            label: String(d.Nombre || '').trim(),
-            numeroEmpleado: d['Número Proveedor'] || '',
-            cuentaGastos: (d.CuentasGasto || []).join(', '),
-            categoriaGasto: d.Categoría || '',
-          }));
-          setProveedores(lista);
-        },
-        (error) => console.error("Error al cargar proveedores:", error)
-      );
-    }
-  }, [baseURL]);
   useEffect(() => {
     if (form.departamento) {
-      
-      // Buscar en departamentosData el departamento que coincida
       const depObj = departamentosData.find(d => {
         const depName = d.departamento || d.Departamento || d.Area || d.area;
-        
-        // Verificar si el departamento está en formato "NOMBRE : CÓDIGO-SUBDEPARTAMENTO"
         if (depName && depName.includes(' : ')) {
           const mainDep = depName.split(' : ')[0].trim();
           return mainDep === form.departamento;
         }
-        
         return depName === form.departamento;
       });
-      
-      
       if (depObj && Array.isArray(depObj.subdepartamentos)) {
-        
-        // Verificar si el subdepartamento ya está en la lista
         if (form.subDepartamento && !depObj.subdepartamentos.includes(form.subDepartamento)) {
           setSubDepartamentos([
             ...depObj.subdepartamentos.map((sub: string) => ({ value: sub, label: sub })),
@@ -161,15 +222,12 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
             depObj.subdepartamentos.map((sub: string) => ({ value: sub, label: sub }))
           );
         }
+      } else if (form.subDepartamento) {
+        setSubDepartamentos([
+          { value: form.subDepartamento, label: form.subDepartamento }
+        ]);
       } else {
-        // Si no hay subdepartamentos pero sí hay uno seleccionado, crear una lista con solo ese
-        if (form.subDepartamento) {
-          setSubDepartamentos([
-            { value: form.subDepartamento, label: form.subDepartamento }
-          ]);
-        } else {
-          setSubDepartamentos([]);
-        }
+        setSubDepartamentos([]);
       }
     } else {
       setSubDepartamentos([]);
@@ -187,6 +245,7 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
       );
     }
   }, [proveedorInput, proveedores]);
+
   useEffect(() => {
     if (!selectedProvider) {
       setCategoriasFiltradas(categorias);
@@ -197,21 +256,16 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
       }));
       return;
     }
-
     if (selectedProvider.cuentaGastos && selectedProvider.cuentaGastos.trim() !== '') {
       const cuentasProveedor = selectedProvider.cuentaGastos.split(',').map(cuenta => cuenta.trim().toLowerCase());
-
       const nuevasCategoriasFiltradas = categorias.filter(categoria => {
         const categoriaNombre = categoria.label.toLowerCase();
-        const match = cuentasProveedor.some(cuenta => categoriaNombre.endsWith(cuenta));
-        return match;
+        return cuentasProveedor.some(cuenta => categoriaNombre.endsWith(cuenta));
       });
-
       setCategoriasFiltradas(nuevasCategoriasFiltradas.map(categoria => ({
         ...categoria,
-        label: categoria.label // Mostrar solo el label
+        label: categoria.label
       })));
-
       if (nuevasCategoriasFiltradas.length === 1) {
         const catUnica = nuevasCategoriasFiltradas[0];
         setForm(prevForm => ({
@@ -227,7 +281,7 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
         }));
       }
     } else {
-      setCategoriasFiltradas(categorias); // Mostrar todas las categorías
+      setCategoriasFiltradas(categorias);
       setForm(prevForm => ({
         ...prevForm,
         categoriaGasto: '',
@@ -235,8 +289,6 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
       }));
     }
   }, [selectedProvider, categorias]);
-
-  // Function for debugging API responses
 
   const handleNumeroEmpleadoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -252,11 +304,9 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
     if (numEmpleadoTimeout) clearTimeout(numEmpleadoTimeout);
     const timeout = setTimeout(() => {
       if (value.trim()) {
-        fetch(`${baseURL}/api/solicitante?numEmpleado=${encodeURIComponent(value.trim())}`)
-          .then(res => res.json())
+        fetchSolicitanteByNumeroEmpleado(value.trim())
           .then((data: any) => {
             if (!data || !data.Nombre) {
-              // Clear form if employee does not exist
               setForm(f => ({
                 ...f,
                 solicitante: '',
@@ -266,95 +316,16 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
                 centroCostos: ''
               }));
             }
-            // Extraer nombre del solicitante
-            const nombre = data?.Nombre || data?.nombre || '';
-            
-            // Extraer correo electrónico
-            const correo = data?.['Correo electrónico'] || data?.correo || '';
-              // Procesar departamento y subdepartamento
-            let departamento = '';
-            let subDepartamento = '';
-            let centroCostosCalculado = '';
-            
-            // El departamento puede venir en formato "DEPTO : CÓDIGO-SUBDEPTO"
-            const deptStr = data?.Departamento || data?.departamento || '';
-            
-            if (deptStr) {
-              const deptParts = deptStr.split(' : ');
-              if (deptParts.length > 1) {
-                departamento = deptParts[0].trim();
-                
-                // El subdepartamento puede estar después del código
-                const subPartsInput = deptParts[1].trim();
-                
-                // Intentar buscar un patrón de código-subdepartamento
-                const match = subPartsInput.match(/^(\d+)-(.+)$/);
-                if (match) {
-                  centroCostosCalculado = match[1].trim();
-                  subDepartamento = match[2].trim();
-                } else {
-                  // Intentar dividir por el primer guión
-                  const subParts = subPartsInput.split('-');
-                  if (subParts.length > 1) {
-                    centroCostosCalculado = subParts[0].trim();
-                    // Juntar el resto como subdepartamento (por si hay más guiones)
-                    subDepartamento = subParts.slice(1).join('-').trim();
-                  } else {
-                    subDepartamento = subPartsInput;
-                  }
-                }
-              } else {
-                departamento = deptStr;
-              }
-            }
-            
-            // Si no se encontró un centro de costos, intentar extraerlo del subdepartamento
-            if (!centroCostosCalculado && subDepartamento) {
-              const match = subDepartamento.match(/^([A-Z0-9]+)[\s\-_]+/);
-              if (match && match[1] && match[1].trim()) {
-                centroCostosCalculado = match[1].trim();
-              } else {
-                const partes = subDepartamento.split(/[\s\-_]+/);
-                if (partes.length > 0 && partes[0] && partes[0].trim()) {
-                  centroCostosCalculado = partes[0].trim();
-                }
-              }
-            }
-            
-            // Si aún no hay centro de costos, intentar usar el campo específico
-            if (!centroCostosCalculado) {
-              centroCostosCalculado = data?.centroCostos || data?.['Centro de costos'] || '';
-            }            // Imprimir todos los datos procesados para depuración
-            console.log("Datos finales procesados:", {
-              nombre,
-              correo,
-              departamento,
-              subDepartamento,
-              centroCostos: centroCostosCalculado
-            });
-
-            // Antes de actualizar el formulario, verificar si el subdepartamento existe
-            let actualSubDepartamento = subDepartamento;
-            
-            // Usar setForm con una función para garantizar el estado más actualizado
-            setForm(prevForm => {
-              const updatedForm = {
-                ...prevForm,
-                solicitante: nombre,
-                correo: correo,
-                departamento: departamento,
-                subDepartamento: actualSubDepartamento,
-                centroCostos: centroCostosCalculado
-              };
-              
-              console.log("Actualizando formulario con:", updatedForm);
-              return updatedForm;
-            });
-
-            // Extraer empresa
-            const empresa = data?.Subsidiaria || data?.subsidiaria || data?.empresa || '';
-            setEmpresa(empresa);
-            
+            const parsed = parseEmpleadoData(data);
+            setForm(prevForm => ({
+              ...prevForm,
+              solicitante: parsed.nombre,
+              correo: parsed.correo,
+              departamento: parsed.departamento,
+              subDepartamento: parsed.subDepartamento,
+              centroCostos: parsed.centroCostos
+            }));
+            setEmpresa(parsed.empresa);
             if (onNumeroEmpleadoChange) {
               onNumeroEmpleadoChange(value);
             }
@@ -379,7 +350,7 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
           centroCostos: ''
         }));
       }
-    }, 1000); // Increase debounce time to 1000ms
+    }, 1000);
     setNumEmpleadoTimeout(timeout);
   };
 
@@ -398,23 +369,10 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
     } else if (name === 'numeroEmpleado') {
       handleNumeroEmpleadoChange(e as React.ChangeEvent<HTMLInputElement>);
     } else if (name === 'subDepartamento') {
-      let centroCostos = '';
-      if (value && value.trim()) {
-        const match = value.match(/^([A-Z0-9]+)[\s\-_]+/);
-        if (match && match[1] && match[1].trim()) {
-          centroCostos = match[1].trim();
-        } else {
-          const partes = value.split(/[\s\-_]+/);
-          if (partes.length > 0 && partes[0] && partes[0].trim()) {
-            centroCostos = partes[0].trim();
-          }
-        }
-      }
-
       setForm(f => ({
         ...f,
         subDepartamento: value,
-        centroCostos
+        centroCostos: getCentroCostosFromSubDepartamento(value)
       }));
     } else if (name === 'categoriaGasto') {
       const categoriaSeleccionada = categoriasFiltradas.find(c => c.value === value);
@@ -456,9 +414,7 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     const categoriaSeleccionada = categoriasFiltradas.find(c => c.value === form.categoriaGasto);
-
     const payload = {
       ...form,
       empresa,
@@ -467,15 +423,9 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
       periodoPresupuesto,
       Fecha: new Date().toISOString(),
     };
-
     try {
-      const response = await fetch(`${baseURL}/api/guardar-presupuesto`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const data = await response.json();
-      if (!response.ok || data?.error) {
+      const data = await guardarPresupuesto(payload);
+      if (!data || data?.error) {
         showErrorPopup(data?.error || 'Error al guardar el presupuesto');
         return;
       }
@@ -586,14 +536,18 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
           }}
         >
           <div className="form-group" style={{ gridColumn: '1 / 2' }}>
-            <label style={{
-              fontWeight: 500,
-              marginBottom: 6,
-              display: 'block',
-              textAlign: 'left',
-              color: theme === 'dark' ? '#f3f3f3' : '#111'
-            }}>Número de Empleado:</label>
+            <label
+              htmlFor="numeroEmpleado"
+              style={{
+                fontWeight: 500,
+                marginBottom: 6,
+                display: 'block',
+                textAlign: 'left',
+                color: theme === 'dark' ? '#f3f3f3' : '#111'
+              }}
+            >Número de Empleado:</label>
             <input
+              id="numeroEmpleado"
               name="numeroEmpleado"
               value={form.numeroEmpleado}
               onChange={handleChange}

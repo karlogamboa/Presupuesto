@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import apiConfig from '../config/apiConfig.json';
+import { sendEmail } from '../services';
 
 const SendMailTest: React.FC = () => {
   const [to, setTo] = useState('');
@@ -14,15 +14,10 @@ const SendMailTest: React.FC = () => {
     }
 
     try {
-      const response = await fetch(`${apiConfig.baseURL}/api/SendEmail`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to, subject, body }),
-      });
+      const response = await sendEmail({ to, subject, body });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        const errorMessage = errorData?.message || response.statusText;
+      if (!response || response?.error) {
+        const errorMessage = response?.message || response?.error || 'Error desconocido';
         setMessage(`Error al enviar correo: ${errorMessage}`);
       } else {
         setMessage('Correo enviado exitosamente.');
@@ -37,8 +32,9 @@ const SendMailTest: React.FC = () => {
     <div style={{ maxWidth: 600, margin: '2rem auto', padding: 24, border: '1px solid #ddd', borderRadius: 8 }}>
       <h2>Prueba de Envío de Correo</h2>
       <div style={{ marginBottom: 16 }}>
-        <label style={{ display: 'block', marginBottom: 8 }}>Para:</label>
+        <label htmlFor="to-email" style={{ display: 'block', marginBottom: 8 }}>Para:</label>
         <input
+          id="to-email"
           type="email"
           value={to}
           onChange={(e) => setTo(e.target.value)}
@@ -76,5 +72,4 @@ const SendMailTest: React.FC = () => {
     </div>
   );
 };
-
 export default SendMailTest;

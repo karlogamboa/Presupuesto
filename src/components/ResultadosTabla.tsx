@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import apiConfig from '../config/apiConfig.json';
+import { fetchResultados } from '../services';
 
 interface ResultadosTablaProps {
   data?: any[];
@@ -18,7 +18,6 @@ const ResultadosTabla: React.FC<ResultadosTablaProps> = ({
 }) => {
   const [data, setData] = useState<any[]>(propData || []);
   const [pagina, setPagina] = useState(1);
-  const baseURL = apiConfig.baseURL;
   const porPagina = 10;
 
   const getRowBg = (estatus: string, idx: number, theme: 'dark' | 'light') => {
@@ -44,16 +43,15 @@ const ResultadosTabla: React.FC<ResultadosTablaProps> = ({
   }, []);
 
   useEffect(() => {
-    if (!propData && baseURL) {
-      fetch(`${baseURL}/api/resultados`)
-        .then(res => res.json())
+    if (!propData) {
+      fetchResultados()
         .then(apiData => setData(apiData || []))
         .catch(() => {});
     } else {
       setData(propData || []);
     }
     setPagina(1);
-  }, [propData, baseURL]);
+  }, [propData]);
 
   const dataFiltrada = numeroEmpleado
     ? data.filter(row => (row.numeroEmpleado || '').toString().includes(numeroEmpleado))
@@ -220,20 +218,33 @@ const ResultadosTabla: React.FC<ResultadosTablaProps> = ({
       </div>
       {totalPaginas > 1 && (
         <div style={{ display: 'flex', justifyContent: 'center', marginTop: 18, gap: 8 }}>
-          <button
-            onClick={() => setPagina(p => Math.max(1, p - 1))}
-            disabled={pagina === 1}
-            style={{
-              padding: '6px 14px',
-              borderRadius: 6,
-              border: theme === 'dark' ? '1px solid #616161' : '1px solid #bdbdbd',
-              background: pagina === 1 ? (theme === 'dark' ? '#616161' : '#eee') : (theme === 'dark' ? '#424242' : '#fff'),
-              cursor: pagina === 1 ? 'not-allowed' : 'pointer',
-              color: theme === 'dark' ? '#f3f3f3' : '#111',
-            }}
-          >
-            Anterior
-          </button>
+          {/*
+            Extract background color for the "Anterior" button to avoid nested ternary
+          */}
+          {(() => {
+            let anteriorBtnBg = '';
+            if (pagina === 1) {
+              anteriorBtnBg = theme === 'dark' ? '#616161' : '#eee';
+            } else {
+              anteriorBtnBg = theme === 'dark' ? '#424242' : '#fff';
+            }
+            return (
+              <button
+                onClick={() => setPagina(p => Math.max(1, p - 1))}
+                disabled={pagina === 1}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: 6,
+                  border: theme === 'dark' ? '1px solid #616161' : '1px solid #bdbdbd',
+                  background: anteriorBtnBg,
+                  cursor: pagina === 1 ? 'not-allowed' : 'pointer',
+                  color: theme === 'dark' ? '#f3f3f3' : '#111',
+                }}
+              >
+                Anterior
+              </button>
+            );
+          })()}
           <span style={{ alignSelf: 'center', fontWeight: 500, color: theme === 'dark' ? '#f3f3f3' : '#111' }}>
             Página {pagina} de {totalPaginas}
           </span>

@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useAuthSession } from './hooks/useAuthSession';
 import SolicitudGastoForm from './components/SolicitudGastoForm';
 import ResultadosTabla from './components/ResultadosTabla';
-import apiConfig from './config/apiConfig.json';
+import { fetchResultados } from './services';
 import './App.css';
 
 interface Resultado {
@@ -25,37 +26,39 @@ interface ErrorMessage {
 }
 
 function App() {
+  const { isAuthenticated, isExpired } = useAuthSession();
   const [resultados, setResultados] = useState<Resultado[]>([]);
   const [solicitanteSeleccionado, setSolicitanteSeleccionado] = useState<string>('');
   const [filtroEstatus, setFiltroEstatus] = useState<string>('Todos');
   const [numeroEmpleadoFiltro, setNumeroEmpleadoFiltro] = useState<string>('');
   const [errorMessages, setErrorMessages] = useState<ErrorMessage[]>([]);
-  const baseURL = apiConfig.baseURL;
 
   useEffect(() => {
-    if (numeroEmpleadoFiltro && baseURL) {
-      fetchResultados(numeroEmpleadoFiltro);
+    if (!isAuthenticated || isExpired) {
+      window.location.href = '/login';
+    }
+  }, [isAuthenticated, isExpired]);
+
+  useEffect(() => {
+    if (numeroEmpleadoFiltro) {
+      fetchResultados(numeroEmpleadoFiltro)
+        .then((data) => {
+          const resultadosConCampos = (data ?? []).map((item: any) => ({
+            ...item,
+            cecos: item.cecos ?? item.centroCostos ?? '',
+            periodoPresupuesto: item.periodoPresupuesto ?? 'N/A',
+            proveedor: item.proveedor ?? 'N/A',
+          }));
+          setResultados(resultadosConCampos);
+        })
+        .catch(() => {
+          setResultados([]);
+          addErrorMessage('Error al obtener resultados');
+        });
     } else {
       setResultados([]);
     }
-  }, [numeroEmpleadoFiltro, baseURL]);
-
-  const fetchResultados = async (numeroEmpleado: string) => {
-    try {
-      const res = await fetch(`${baseURL}/api/resultados?numEmpleado=${encodeURIComponent(numeroEmpleado)}`);
-      const data = await res.json();
-      const resultadosConCampos = (data || []).map((item: any) => ({
-        ...item,
-        cecos: item.cecos || item.centroCostos || '',
-        periodoPresupuesto: item.periodoPresupuesto || 'N/A',
-        proveedor: item.proveedor || 'N/A',
-      }));
-      setResultados(resultadosConCampos);
-    } catch {
-      setResultados([]);
-      addErrorMessage('Error al obtener resultados');
-    }
-  };
+  }, [numeroEmpleadoFiltro]);
 
   const addErrorMessage = (text: string) => {
     setErrorMessages(prev => [...prev, { id: Date.now(), text }]);
@@ -75,7 +78,7 @@ function App() {
       },
       ...prev,
     ]);
-    setSolicitanteSeleccionado(data.solicitante || '');
+    setSolicitanteSeleccionado(data.solicitante ?? '');
   };
 
   const handleEstatusChange = (idx: number, nuevoEstatus: string) => {
