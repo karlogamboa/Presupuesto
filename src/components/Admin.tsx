@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { fetchResultados, editarEstatusSolicitud } from '../services';
+import MenuUsuario from './MenuUsuario';
 
 interface Solicitud {
   id?: string;
@@ -146,6 +147,7 @@ const Admin: React.FC = () => {
 
   return (
     <div style={{ maxWidth: 1100, margin: '2rem auto', padding: 24 }}>
+      <MenuUsuario />
       
       {(
         <>

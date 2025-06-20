@@ -73,3 +73,6 @@ const SendMailTest: React.FC = () => {
   );
 };
 export default SendMailTest;
+
+// No requiere cambios, el componente SendMailTest ya es de acceso público.
+// Solo asegúrate de que en tu router NO esté envuelto en ProtectedRoute.

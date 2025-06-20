@@ -1,17 +1,22 @@
-import React from 'react';
-import oktaAuth from '../auth/oktaAuth';
+import React  from 'react';
+import { startOktaLogin } from '../auth/oktaAuth';
 
 const LoginPage: React.FC = () => {
   const handleLogin = async () => {
-    await oktaAuth.signInWithRedirect();
+    await startOktaLogin();
   };
 
   return (
-    <div>
-      <h1>Iniciar Sesión</h1>
+    <div style={{ textAlign: 'center', marginTop: 60 }}>
+      <img
+        src="https://www.circulodecredito.com.mx/documents/10588964/0/cdc-logo-negro.svg"
+        alt="Círculo de Crédito"
+        style={{ width: 180, marginBottom: 24 }}
+      />      
       <button onClick={handleLogin}>Iniciar sesión con Okta</button>
     </div>
   );
 };
 
 export default LoginPage;
+

@@ -4,8 +4,10 @@ import {
   fetchCategoriasGasto,
   fetchProveedores,
   fetchSolicitanteByNumeroEmpleado,
-  guardarPresupuesto
+  guardarPresupuesto,
+  fetchResultados // <-- Importa fetchResultados si lo usas aquí
 } from '../services';
+import { globalUserInfo } from './MenuUsuario';
 
 interface Option {
   value: string;
@@ -83,7 +85,7 @@ function useCategorias(setCategorias: (opts: Option[]) => void, setCategoriasFil
       .then((data: any[]) => {
         const categoriasData = (data || []).map((d: any) => ({
           value: String(d.cuenta || d.Cuenta || ''),
-          label: d['Cuenta de gastos'] || '',
+          label: d.label || '',
         }));
         setCategorias(categoriasData);
         setCategoriasFiltradas(
@@ -101,11 +103,15 @@ function useProveedores(setProveedores: (opts: Option[]) => void) {
     fetchProveedores()
       .then((data: any[]) => {
         const lista = (data || []).map((d: any) => ({
-          value: String(d.Nombre || '').trim(),
-          label: String(d.Nombre || '').trim(),
-          numeroEmpleado: d['Número Proveedor'] || '',
-          cuentaGastos: (d.CuentasGasto || []).join(', '),
-          categoriaGasto: d.Categoría || '',
+          value: String(d.nombre || d.Nombre || d.id || '').trim(),
+          label: String(d.nombre || d.Nombre || '').trim(),
+          numeroEmpleado: d.numeroProveedor || d['Número Proveedor'] || '',
+          cuentaGastos: typeof d.cuentasGasto === 'string'
+            ? d.cuentasGasto
+            : Array.isArray(d.cuentasGasto)
+              ? d.cuentasGasto.join(', ')
+              : '',
+          categoriaGasto: d.categoria || d.Categoría || '',
         }));
         setProveedores(lista);
       })
@@ -115,8 +121,9 @@ function useProveedores(setProveedores: (opts: Option[]) => void) {
 
 function getCentroCostosFromSubDepartamento(subDepartamento: string) {
   let centroCostos = '';
-  if (subDepartamento && subDepartamento.trim()) {
-    const match = subDepartamento.match(/^([A-Z0-9]+)[\s\-_]+/);
+  if (subDepartamento?.trim()) {
+    const regex = /^([A-Z0-9]+)[\s\-_]+/;
+    const match = regex.exec(subDepartamento);
     if (match && match[1] && match[1].trim()) {
       centroCostos = match[1].trim();
     } else {
@@ -196,6 +203,136 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
   const [numEmpleadoTimeout, setNumEmpleadoTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
   const periodos = usePeriodos();
   const [periodoPresupuesto, setPeriodoPresupuesto] = useState<string>('');
+  const [numeroEmpleadoCargado, setNumeroEmpleadoCargado] = useState<string>('');
+
+  // useEffect principal para cargar el número de empleado al montar el componente
+  useEffect(() => {
+    // 1. Intenta obtener el número de empleado de la variable global
+    let numeroEmpleado: string | undefined = globalUserInfo?.numeroEmpleado;
+    // Nuevo: Intenta obtener el correo del usuario logueado
+    let correoUsuario: string | undefined = globalUserInfo?.email;
+
+    // 2. Si no está en la variable global, intenta obtenerlo del id_token (tras login o refresh)
+    if (!numeroEmpleado || !correoUsuario) {
+      const idToken = localStorage.getItem('id_token');
+      if (idToken) {
+        try {
+          const payload = JSON.parse(atob(idToken.split('.')[1]));
+          if (!numeroEmpleado)
+            numeroEmpleado = payload.numeroEmpleado || payload.numero_empleado || payload.numEmpleado;
+          if (!correoUsuario)
+            correoUsuario = payload.email || payload.correo || payload['Correo electrónico'];
+        } catch {
+          // No-op
+        }
+      }
+    }
+
+    // 3. Si lo encuentra, setea el número de empleado y carga los datos relacionados
+    if (numeroEmpleado && numeroEmpleado !== '') {
+      setForm(f => ({
+        ...f,
+        numeroEmpleado,
+        correo: correoUsuario || f.correo // Asigna el correo si está disponible
+      }));
+      setNumeroEmpleadoCargado(numeroEmpleado);
+
+      fetchResultados(numeroEmpleado).then(() => {});
+      fetchSolicitanteByNumeroEmpleado(numeroEmpleado)
+        .then((data: any) => {
+          if (!data || !data.Nombre) {
+            setForm(f => ({
+              ...f,
+              solicitante: '',
+              correo: correoUsuario || '',
+              departamento: '',
+              subDepartamento: '',
+              centroCostos: ''
+            }));
+            return;
+          }
+          const parsed = parseEmpleadoData(data);
+          setForm(prevForm => ({
+            ...prevForm,
+            solicitante: parsed.nombre,
+            correo: correoUsuario || parsed.correo, // Prioriza el correo del usuario logueado
+            departamento: parsed.departamento,
+            subDepartamento: parsed.subDepartamento,
+            centroCostos: parsed.centroCostos
+          }));
+          setEmpresa(parsed.empresa);
+          if (onNumeroEmpleadoChange) {
+            onNumeroEmpleadoChange(numeroEmpleado!);
+          }
+        })
+        .catch(() => {
+          setForm(f => ({
+            ...f,
+            solicitante: '',
+            correo: correoUsuario || '',
+            departamento: '',
+            subDepartamento: '',
+            centroCostos: ''
+          }));
+        });
+    }
+
+    // Escucha cambios globales para actualizar el número de empleado si cambia en otro componente
+    function handleGlobalUserInfoUpdate() {
+      const nuevoNumeroEmpleado = globalUserInfo?.numeroEmpleado;
+      if (nuevoNumeroEmpleado && nuevoNumeroEmpleado !== numeroEmpleadoCargado) {
+        setForm(f => ({
+          ...f,
+          numeroEmpleado: nuevoNumeroEmpleado
+        }));
+        setNumeroEmpleadoCargado(nuevoNumeroEmpleado);
+
+        fetchResultados(nuevoNumeroEmpleado).then(() => {});
+        fetchSolicitanteByNumeroEmpleado(nuevoNumeroEmpleado)
+          .then((data: any) => {
+            if (!data || !data.Nombre) {
+              setForm(f => ({
+                ...f,
+                solicitante: '',
+                correo: '',
+                departamento: '',
+                subDepartamento: '',
+                centroCostos: ''
+              }));
+              return;
+            }
+            const parsed = parseEmpleadoData(data);
+            setForm(prevForm => ({
+              ...prevForm,
+              solicitante: parsed.nombre,
+              correo: parsed.correo,
+              departamento: parsed.departamento,
+              subDepartamento: parsed.subDepartamento,
+              centroCostos: parsed.centroCostos
+            }));
+            setEmpresa(parsed.empresa);
+            if (onNumeroEmpleadoChange) {
+              onNumeroEmpleadoChange(nuevoNumeroEmpleado!);
+            }
+          })
+          .catch(() => {
+            setForm(f => ({
+              ...f,
+              solicitante: '',
+              correo: '',
+              departamento: '',
+              subDepartamento: '',
+              centroCostos: ''
+            }));
+          });
+      }
+    }
+    window.addEventListener('globalUserInfoUpdated', handleGlobalUserInfoUpdate);
+    return () => {
+      window.removeEventListener('globalUserInfoUpdated', handleGlobalUserInfoUpdate);
+    };
+  // Asegura que se ejecute también cuando cambia globalUserInfo
+  }, [onNumeroEmpleadoChange, globalUserInfo?.numeroEmpleado]);
 
   useDepartamentos(setDepartamentosData, setDepartamentos);
   useCategorias(setCategorias, setCategoriasFiltradas);
@@ -291,6 +428,8 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
   }, [selectedProvider, categorias]);
 
   const handleNumeroEmpleadoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Solo permite cambios si el campo no es readonly (es decir, si no se cargó automáticamente)
+    if (numeroEmpleadoCargado) return;
     const value = e.target.value;
     setForm(f => ({
       ...f,
@@ -389,9 +528,31 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
   };
 
   const handleProveedorInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setProveedorInput(e.target.value);
+    const value = e.target.value;
+    setProveedorInput(value);
     setProveedor('');
     setForm(f => ({ ...f, proveedor: '', categoriaGasto: '', cuentaGastos: '' }));
+
+    // Nuevo: Si el texto coincide exactamente con un proveedor, selecciona ese proveedor
+    const provObject = proveedores.find(
+      p => p.label.trim().toLowerCase() === value.trim().toLowerCase()
+    );
+    if (provObject) {
+      setSelectedProvider(provObject);
+      // Filtra categorías según el proveedor
+      if (provObject.cuentaGastos && provObject.cuentaGastos.trim() !== '') {
+        const cuentasProveedor = provObject.cuentaGastos.split(',').map(cuenta => cuenta.trim().toLowerCase());
+        const nuevasCategoriasFiltradas = categorias.filter(categoria =>
+          cuentasProveedor.some(cuenta => categoria.label.toLowerCase().endsWith(cuenta))
+        );
+        setCategoriasFiltradas(nuevasCategoriasFiltradas);
+      } else {
+        setCategoriasFiltradas(categorias);
+      }
+    } else {
+      setSelectedProvider(null);
+      setCategoriasFiltradas(categorias);
+    }
   };
 
   const showErrorPopup = (message: string) => {
@@ -550,8 +711,9 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
               id="numeroEmpleado"
               name="numeroEmpleado"
               value={form.numeroEmpleado}
-              onChange={handleChange}
+              onChange={handleNumeroEmpleadoChange}
               required
+              readOnly={!!numeroEmpleadoCargado}
               style={{
                 width: '100%',
                 padding: 8,
@@ -608,14 +770,17 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
             />
           </div>
           <div className="form-group" style={{ gridColumn: '1 / 2' }}>
-            <label style={{
-              fontWeight: 500,
-              marginBottom: 6,
-              display: 'block',
-              textAlign: 'left',
-              color: theme === 'dark' ? '#f3f3f3' : '#111'
-            }}>Departamento:</label>
+            <label
+              htmlFor="departamento"
+              style={{
+                fontWeight: 500,
+                marginBottom: 6,
+                display: 'block',
+                textAlign: 'left',
+                color: theme === 'dark' ? '#f3f3f3' : '#111'
+              }}>Departamento:</label>
             <select
+              id="departamento"
               name="departamento"
               value={form.departamento}
               onChange={handleChange}
@@ -637,14 +802,17 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
             </select>
           </div>
           <div className="form-group" style={{ gridColumn: '2 / 3' }}>
-            <label style={{
-              fontWeight: 500,
-              marginBottom: 6,
-              display: 'block',
-              textAlign: 'left',
-              color: theme === 'dark' ? '#f3f3f3' : '#111'
-            }}>Sub-Departamento:</label>
+            <label
+              htmlFor="subDepartamento"
+              style={{
+                fontWeight: 500,
+                marginBottom: 6,
+                display: 'block',
+                textAlign: 'left',
+                color: theme === 'dark' ? '#f3f3f3' : '#111'
+              }}>Sub-Departamento:</label>
             <select
+              id="subDepartamento"
               name="subDepartamento"
               value={form.subDepartamento}
               onChange={handleChange}
@@ -782,63 +950,102 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
                   top: 60,
                   left: 0,
                   right: 0,
-                  zIndex: 100,
-                  background: '#fff',
-                  border: '1px solid #cfd8dc',
+                  zIndex: 2000, // Aumenta el z-index
+                  background: theme === 'dark' ? '#232323' : '#fff', // Ajusta fondo según tema
+                  border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc', // Ajusta borde según tema
                   borderRadius: 8,
                   maxHeight: 260,
                   overflowY: 'auto',
-                  boxShadow: '0 4px 16px #0002'
+                  boxShadow: '0 4px 16px #0002',
+                  color: theme === 'dark' ? '#f3f3f3' : '#111' // Ajusta color de texto según tema
                 }}
               >
-                {proveedoresFiltrados.map((prov, idx) => (
-                  <div
-                    key={prov.value + '-' + idx}
-                    onClick={() => {
-                      setSelectedProvider(prov);
-                      setProveedor(prov.value); 
-                      setProveedorInput(prov.label);
-                      const cuentasProveedor = prov.cuentaGastos?.split(',').map((cuenta: string) => cuenta.trim().toLowerCase()) || [];
-                      const nuevasCategoriasFiltradas = categorias.filter(categoria =>
-                        cuentasProveedor.includes(categoria.value.toLowerCase())
-                      );
-                      setCategoriasFiltradas(nuevasCategoriasFiltradas);
-                    }}
-                    style={{
-                      padding: 12,
-                      cursor: 'pointer',
-                      borderBottom: idx < proveedoresFiltrados.length - 1 ? '1px solid #f0f0f0' : 'none',
-                      background: prov.value === proveedor ? '#e3eafc' : '#fff',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 2
-                    }}
-                  >
-                    <span style={{ fontWeight: 600, color: '#1976d2', fontSize: 16 }}>{prov.label}</span>
-                    {prov.numeroEmpleado && (
-                      <span style={{ color: '#888', fontSize: 13 }}>Núm. Proveedor: {prov.numeroEmpleado}</span>
-                    )}
-                    {prov.categoriaGasto && (
-                      <span style={{ color: '#888', fontSize: 13 }}>Categoría: {prov.categoriaGasto}</span>
-                    )}
-                    {prov.cuentaGastos && (
-                      <span style={{ color: '#888', fontSize: 13 }}>Cuenta Gastos: {prov.cuentaGastos}</span>
-                    )}
-                  </div>
-                ))}
+                {proveedoresFiltrados.map((prov, idx) => {
+                  // Extract ternary operations into variables
+                  const isLast = idx < proveedoresFiltrados.length - 1;
+                  const borderBottom = isLast
+                    ? (theme === 'dark' ? '1px solid #333' : '1px solid #f0f0f0')
+                    : 'none';
+                  const isSelected = prov.value === proveedor;
+                  let background = '';
+                  if (isSelected) {
+                    background = theme === 'dark' ? '#2a3b5c' : '#e3eafc';
+                  } else {
+                    background = theme === 'dark' ? '#232323' : '#fff';
+                  }
+                  return (
+                    <button
+                      key={prov.value + '-' + idx}
+                      type="button"
+                      onClick={() => {
+                        setSelectedProvider(prov);
+                        setProveedor(prov.value); 
+                        setProveedorInput(prov.label);
+                        const cuentasProveedor = prov.cuentaGastos?.split(',').map((cuenta: string) => cuenta.trim().toLowerCase()) || [];
+                        const nuevasCategoriasFiltradas = categorias.filter(categoria =>
+                          cuentasProveedor.includes(categoria.value.toLowerCase())
+                        );
+                        setCategoriasFiltradas(nuevasCategoriasFiltradas);
+                      }}
+                      style={{
+                        padding: 12,
+                        cursor: 'pointer',
+                        border: 'none',
+                        borderBottom,
+                        background,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 2,
+                        color: theme === 'dark' ? '#f3f3f3' : '#111',
+                        textAlign: 'left',
+                        width: '100%',
+                        outline: isSelected ? '2px solid #1976d2' : undefined,
+                      }}
+                      tabIndex={0}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setSelectedProvider(prov);
+                          setProveedor(prov.value); 
+                          setProveedorInput(prov.label);
+                          const cuentasProveedor = prov.cuentaGastos?.split(',').map((cuenta: string) => cuenta.trim().toLowerCase()) || [];
+                          const nuevasCategoriasFiltradas = categorias.filter(categoria =>
+                            cuentasProveedor.includes(categoria.value.toLowerCase())
+                          );
+                          setCategoriasFiltradas(nuevasCategoriasFiltradas);
+                        }
+                      }}
+                      aria-pressed={isSelected}
+                    >
+                      <span style={{ fontWeight: 600, color: theme === 'dark' ? '#90caf9' : '#1976d2', fontSize: 16 }}>{prov.label}</span>
+                      {prov.numeroEmpleado && (
+                        <span style={{ color: theme === 'dark' ? '#bbb' : '#888', fontSize: 13 }}>Núm. Proveedor: {prov.numeroEmpleado}</span>
+                      )}
+                      {prov.categoriaGasto && (
+                        <span style={{ color: theme === 'dark' ? '#bbb' : '#888', fontSize: 13 }}>Categoría: {prov.categoriaGasto}</span>
+                      )}
+                      {prov.cuentaGastos && (
+                        <span style={{ color: theme === 'dark' ? '#bbb' : '#888', fontSize: 13 }}>Cuenta Gastos: {prov.cuentaGastos}</span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
           <div className="form-group" style={{ gridColumn: '1 / 3', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div>
-              <label style={{
-                fontWeight: 500,
-                marginBottom: 6,
-                display: 'block',
-                textAlign: 'left',
-                color: theme === 'dark' ? '#f3f3f3' : '#111'
-              }}>Cuenta de Gastos:</label>
+              <label
+                htmlFor="categoriaGasto"
+                style={{
+                  fontWeight: 500,
+                  marginBottom: 6,
+                  display: 'block',
+                  textAlign: 'left',
+                  color: theme === 'dark' ? '#f3f3f3' : '#111'
+                }}>Cuenta de Gastos:</label>
               <select
+                id="categoriaGasto"
                 name="categoriaGasto"
                 value={form.categoriaGasto}
                 onChange={handleChange}
@@ -885,16 +1092,19 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
             </div>
           </div>
           <div className="form-group" style={{ gridColumn: '3 / 4' }}>
-            <label style={{
-              fontWeight: 500,
-              marginBottom: 6,
-              display: 'block',
-              textAlign: 'left',
-              color: theme === 'dark' ? '#f3f3f3' : '#111'
-            }}>
+            <label
+              htmlFor="montoSubtotal"
+              style={{
+                fontWeight: 500,
+                marginBottom: 6,
+                display: 'block',
+                textAlign: 'left',
+                color: theme === 'dark' ? '#f3f3f3' : '#111'
+              }}>
               Monto Solicitado ( s/IVA)
             </label>
             <input
+              id="montoSubtotal"
               name="montoSubtotal"
               type="number"
               value={form.montoSubtotal}

@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useAuthSession } from './hooks/useAuthSession';
 import SolicitudGastoForm from './components/SolicitudGastoForm';
 import ResultadosTabla from './components/ResultadosTabla';
 import { fetchResultados } from './services';
 import './App.css';
+import MenuUsuario from './components/MenuUsuario';
 
 interface Resultado {
   id?: number;
@@ -26,18 +26,11 @@ interface ErrorMessage {
 }
 
 function App() {
-  const { isAuthenticated, isExpired } = useAuthSession();
   const [resultados, setResultados] = useState<Resultado[]>([]);
   const [solicitanteSeleccionado, setSolicitanteSeleccionado] = useState<string>('');
   const [filtroEstatus, setFiltroEstatus] = useState<string>('Todos');
   const [numeroEmpleadoFiltro, setNumeroEmpleadoFiltro] = useState<string>('');
   const [errorMessages, setErrorMessages] = useState<ErrorMessage[]>([]);
-
-  useEffect(() => {
-    if (!isAuthenticated || isExpired) {
-      window.location.href = '/login';
-    }
-  }, [isAuthenticated, isExpired]);
 
   useEffect(() => {
     if (numeroEmpleadoFiltro) {
@@ -100,6 +93,7 @@ function App() {
 
   return (
     <div style={{ maxWidth: 900, margin: '0 auto', padding: 24 }}>
+      <MenuUsuario />
       <ErrorPopup messages={errorMessages} onRemove={removeErrorMessage} />
       <h1>Solicitud de Presupuesto</h1>
       <SolicitudGastoForm
