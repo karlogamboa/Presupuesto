@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { fetchUserInfo } from '../services';
+import { fetchUserInfo, logout } from '../services';
 
 // Variable global para compartir info de usuario
 export let globalUserInfo: { email?: string; name?: string; role?: string | string[]; numeroEmpleado?: string } | null = null;
@@ -70,12 +70,20 @@ const MenuUsuario: React.FC = () => {
       });
   }, []);
 
-  const handleLogout = () => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('id_token');
-    localStorage.removeItem('okta_code_verifier');
-    sessionStorage.removeItem('okta_code_verifier');
-    window.location.href = '/login';
+  const handleLogout = async () => {
+    try {
+      const token = localStorage.getItem('access_token');
+      if (token) {
+        await logout(token);
+      }
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('id_token');
+      localStorage.removeItem('okta_code_verifier');
+      sessionStorage.removeItem('okta_code_verifier');
+      window.location.href = '/login';
+    } catch (error) {
+      console.error('Error al cerrar sesión:', error);
+    }
   };
 
   if (!user) return null;

@@ -201,11 +201,28 @@ export async function exchangeOktaCodeForToken(code: string, code_verifier?: str
 
 export async function fetchUserInfo(email?: string) {
   const payload = email ? { email } : {};
-  const res = await fetch(`${baseURL}/api/userinfo`, {
+  const res = await fetch(`${baseURL}/api/userInfo`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify(payload),
   });
   const data = await res.json();
   return data || {};
+}
+
+export async function logout(token: string) {
+  try {
+    const res = await fetch(`${baseURL}/api/logout`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify({ token }),
+    });
+    if (!res.ok) {
+      throw new Error('Error al cerrar sesión en el backend');
+    }
+    return await res.json();
+  } catch (error) {
+    console.error('Error en la solicitud de logout:', error);
+    throw error;
+  }
 }
