@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) 2024 Círculo de Crédito
+ * Versión de compilación: 1.0.0
+ */
+
 import React  from 'react';
 import { startOktaLogin } from '../auth/oktaAuth';
 
@@ -14,6 +19,9 @@ const LoginPage: React.FC = () => {
         style={{ width: 180, marginBottom: 24 }}
       />      
       <button onClick={handleLogin}>Iniciar sesión con Okta</button>
+      <p>
+ * Copyright (c) 2024 Círculo de Crédito
+ * Versión de compilación: 1.0.5</p>
     </div>
   );
 };

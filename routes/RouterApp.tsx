@@ -6,6 +6,7 @@ import Admin from '../src/components/Admin';
 import LoginPage from '../pages/LoginPage';
 import LoginCallback from '../pages/LoginCallback';
 import SendMailTest from '../src/components/SendMailTest';
+import AdminCatalogosUpload from '../src/components/AdminCatalogosUpload';
 
 
 const RouterApp: React.FC = () => (
@@ -21,12 +22,20 @@ const RouterApp: React.FC = () => (
             <Admin />
           </ProtectedRoute>
         }
-      />
+      />     
       <Route
         path="/Solicitud"
         element={
           <ProtectedRoute>
             <App />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/AdminCatalogos"
+        element={
+          <ProtectedRoute>
+            <AdminCatalogosUpload />
           </ProtectedRoute>
         }
       />

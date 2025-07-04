@@ -53,7 +53,7 @@ const MenuUsuario: React.FC = () => {
       return;
     }
     // Si no hay rol o numeroEmpleado, solicita el perfil del usuario al backend (userinfo) enviando el email
-    fetchUserInfo(email)
+    fetchUserInfo()
       .then(data => {
         const userObj = {
           email: data.email,

@@ -1,4 +1,5 @@
-const baseURL = 'http://localhost:8080';
+// Usa variable de entorno para el backend, ideal para S3 estático
+const baseURL = import.meta.env.VITE_BACKEND_URL || 'https://ec2-3-148-196-75.us-east-2.compute.amazonaws.com:8080';
 
 function getAuthHeaders(): HeadersInit {
   const token = localStorage.getItem('access_token');
@@ -11,7 +12,7 @@ export async function fetchSolicitantes() {
   const res = await fetch(`${baseURL}/api/solicitantes`, {
     headers: { ...getAuthHeaders() }
   });
-  return res.json(); 
+  return res.json();
 }
 
 export async function fetchAreas() {
@@ -141,7 +142,7 @@ export async function fetchSolicitanteByNumeroEmpleado(numEmpleado: string) {
 }
 
 export async function guardarPresupuesto(payload: any) {
-  const res = await fetch(`${baseURL}/api/resultados`, {
+  const res = await fetch(`${baseURL}/api/solicitudes-presupuesto`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify(payload),
@@ -151,14 +152,14 @@ export async function guardarPresupuesto(payload: any) {
 
 export async function fetchResultados(numEmpleado?: string) {
   const url = numEmpleado
-    ? `${baseURL}/api/resultados?numEmpleado=${encodeURIComponent(numEmpleado)}`
-    : `${baseURL}/api/resultados`;
+    ? `${baseURL}/api/solicitudes-presupuesto?numeroEmpleado=${encodeURIComponent(numEmpleado)}`
+    : `${baseURL}/api/solicitudes-presupuesto`;
   const res = await fetch(url, { headers: { ...getAuthHeaders() } });
   return res.json();
 }
 
 export async function editarEstatusSolicitud(estatusConfirmacion: string, solicitud: any) {
-  const res = await fetch(`${baseURL}/api/resultados/editar-estatus`, {
+  const res = await fetch(`${baseURL}/api/solicitudes-presupuesto/editar-estatus`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify({ estatusConfirmacion, solicitud }),
@@ -176,15 +177,17 @@ export async function sendEmail({ to, subject, body }: { to: string; subject: st
 }
 
 // Si necesitas intercambiar el code de Okta por un token, hazlo solo vía backend:
-export async function exchangeOktaCodeForToken(code: string, code_verifier?: string) {
-  // Envía code, redirect_uri y code_verifier al backend
+export async function exchangeOktaCodeForToken(code: string, codeVerifier?: string) {
+  // Envía code, redirectUri y codeVerifier al backend
   const payload: Record<string, string> = {
     code,
-    redirect_uri: window.location.origin + '/callback',
+    redirectUri: window.location.origin + '/callback',
   };
-  // Solo agrega code_verifier si tiene valor (no es undefined ni cadena vacía)
-  if (code_verifier && code_verifier.trim() !== '') {
-    payload.code_verifier = code_verifier;
+  // Envía siempre el codeVerifier con el mismo nombre que espera el backend
+  if (codeVerifier && codeVerifier.trim() !== '') {
+    payload.codeVerifier = codeVerifier;
+  } else {
+    throw new Error('El codeVerifier es obligatorio para el flujo PKCE');
   }
   try {
     const res = await fetch(`${baseURL}/api/exchange-token`, {
@@ -194,7 +197,6 @@ export async function exchangeOktaCodeForToken(code: string, code_verifier?: str
     });
     return res.json();
   } catch (error) {
-    // Error de conexión: backend no está corriendo o puerto incorrecto
     throw new Error('No se pudo conectar con el backend en ' + baseURL);
   }
 }
@@ -225,4 +227,17 @@ export async function logout(token: string) {
     console.error('Error en la solicitud de logout:', error);
     throw error;
   }
+
 }
+
+// Obtener configuración de Okta HARDCODEADA temporalmente (async)
+export async function fetchOktaConfig() {
+  return {
+    issuer: 'https://trial-6802190.okta.com/oauth2/default',
+    clientId: '0oasv2pcg4hRbY5YV697',
+    redirectUri: window.location.origin + '/callback',
+    scopes: ['openid', 'profile', 'email'],
+    pkce: true,
+  };
+}
+

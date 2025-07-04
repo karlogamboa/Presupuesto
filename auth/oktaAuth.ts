@@ -1,29 +1,67 @@
 import { OktaAuth } from '@okta/okta-auth-js';
-import { exchangeOktaCodeForToken } from '../src/services';
+import { exchangeOktaCodeForToken, fetchOktaConfig } from '../src/services';
+import type { OktaConfig } from '../src/types/okta';
 
-// Configuración solo para PKCE, sin clientSecret, para frontend SPA
-const oktaAuth = new OktaAuth({
-  issuer: 'https://trial-6802190.okta.com/oauth2/default',
-  clientId: '0oasgvzk0yf1Zg3CN697',
-  redirectUri: window.location.origin + '/callback',
-  responseType: ['code'],
-  scopes: ['openid', 'profile', 'email'],
-  pkce: true,
-});
+// Configuración dinámica de Okta obtenida desde el backend
+let oktaAuth: OktaAuth | null = null;
+let oktaConfig: OktaConfig | null = null;
+
+// Cache de configuración para evitar múltiples llamadas
+let configPromise: Promise<OktaConfig> | null = null;
+
+async function getOktaConfig(): Promise<OktaConfig> {
+  if (oktaConfig) {
+    return oktaConfig;
+  }
+  
+  if (!configPromise) {
+    configPromise = fetchOktaConfig()
+      .then((config: OktaConfig) => {
+        oktaConfig = config;
+        return config;
+      })
+      .catch(error => {
+        configPromise = null; // Reset para permitir reintentos
+        throw error;
+      });
+  }
+  
+  return configPromise;
+}
+
+async function getOktaAuthInstance(): Promise<OktaAuth> {
+  if (oktaAuth) {
+    return oktaAuth;
+  }
+
+  const config = await getOktaConfig();
+  
+  oktaAuth = new OktaAuth({
+    issuer: config.issuer,
+    clientId: config.clientId,
+    redirectUri: window.location.origin + '/callback',
+    responseType: ['code'],
+    scopes: ['openid', 'profile', 'email'],
+    pkce: true,
+  });
+
+  return oktaAuth;
+}
 
 // El frontend solo obtiene el code, el backend hace el intercambio por el token
 // Puedes agregar helpers para redirigir a Okta y leer el code del querystring
 
-export const getAuthorizationUrl = () => {
+export const getAuthorizationUrl = async () => {
+  const config = await getOktaConfig();
   const params = [
-    `client_id=${encodeURIComponent(oktaAuth.options.clientId!)}`,
-    `redirect_uri=${encodeURIComponent(oktaAuth.options.redirectUri!)}`,
+    `client_id=${encodeURIComponent(config.clientId)}`,
+    `redirect_uri=${encodeURIComponent(window.location.origin + '/callback')}`,
     `response_type=code`,
-    `scope=${encodeURIComponent(oktaAuth.options.scopes!.join(' '))}`,
+    `scope=${encodeURIComponent(['openid', 'profile', 'email'].join(' '))}`,
     `state=${encodeURIComponent(Math.random().toString(36).substring(2))}`,
     `code_challenge_method=S256`,
   ].join('&');
-  return `${oktaAuth.options.issuer}/v1/authorize?${params}`;
+  return `${config.issuer}/v1/authorize?${params}`;
 };
 
 // El resto de helpers solo gestionan tokens si el backend los entrega al frontend
@@ -45,19 +83,22 @@ export const isAuthenticated = async (): Promise<boolean> => {
 };
 
 export const getIdToken = async (): Promise<string | null> => {
-  const idToken = await oktaAuth.tokenManager.get('idToken');
+  const oktaAuthInstance = await getOktaAuthInstance();
+  const idToken = await oktaAuthInstance.tokenManager.get('idToken');
   return idToken ? (idToken as any).idToken : null; // Asegúrate de que sea un IDToken
 };
 
 export const getAccessToken = async (): Promise<string | null> => {
-  const accessToken = await oktaAuth.tokenManager.get('accessToken');
+  const oktaAuthInstance = await getOktaAuthInstance();
+  const accessToken = await oktaAuthInstance.tokenManager.get('accessToken');
   return accessToken && (accessToken as any).accessToken ? (accessToken as any).accessToken : null;
 };
 
 export const refreshTokens = async (): Promise<void> => {
   try {
-    await oktaAuth.tokenManager.renew('idToken'); // Renueva el IDToken
-    await oktaAuth.tokenManager.renew('accessToken'); // Renueva el AccessToken
+    const oktaAuthInstance = await getOktaAuthInstance();
+    await oktaAuthInstance.tokenManager.renew('idToken'); // Renueva el IDToken
+    await oktaAuthInstance.tokenManager.renew('accessToken'); // Renueva el AccessToken
   } catch (error) {
     console.error('Error al renovar los tokens:', error);
   }
@@ -93,6 +134,7 @@ export async function startOktaLogin() {
   // Importante: esta función debe ejecutarse en la misma pestaña/ventana donde se recibirá el callback
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = await computeCodeChallenge(codeVerifier);
+  const config = await getOktaConfig();
 
   // Guarda el code_verifier en sessionStorage y localStorage como respaldo
   sessionStorage.setItem('okta_code_verifier', codeVerifier);
@@ -100,15 +142,15 @@ export async function startOktaLogin() {
 
   // Construye la URL de autorización con code_challenge
   const params = [
-    `client_id=${encodeURIComponent(oktaAuth.options.clientId!)}`,
-    `redirect_uri=${encodeURIComponent(oktaAuth.options.redirectUri!)}`,
+    `client_id=${encodeURIComponent(config.clientId)}`,
+    `redirect_uri=${encodeURIComponent(window.location.origin + '/callback')}`,
     `response_type=code`,
-    `scope=${encodeURIComponent(oktaAuth.options.scopes!.join(' '))}`,
+    `scope=${encodeURIComponent(['openid', 'profile', 'email'].join(' '))}`,
     `state=${encodeURIComponent(Math.random().toString(36).substring(2))}`,
     `code_challenge_method=S256`,
     `code_challenge=${encodeURIComponent(codeChallenge)}`,
   ].join('&');
-  window.location.href = `${oktaAuth.options.issuer}/v1/authorize?${params}`;
+  window.location.href = `${config.issuer}/v1/authorize?${params}`;
 }
 
 // En el callback, recupera el code_verifier y úsalo
@@ -141,4 +183,7 @@ export async function exchangeCodeForToken(
   }
 }
 
-export default oktaAuth;
+// Exporta una función que retorna la instancia de OktaAuth cuando esté disponible
+export default async function getOktaAuth(): Promise<OktaAuth> {
+  return await getOktaAuthInstance();
+}
