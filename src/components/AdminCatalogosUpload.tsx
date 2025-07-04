@@ -1,15 +1,12 @@
 import React, { useState } from 'react';
+import { importCatalogCSV } from '../services';
 
 const CATALOG_OPTIONS = [
   { value: 'proveedores', label: 'Proveedores' },
   { value: 'departamentos', label: 'Departamentos' },
-  { value: 'CategoriaGasto', label: 'Categoría de Gasto' },
-  { value: 'area', label: 'Área' },
-  { value: 'solicitante', label: 'Solicitante' },
-  // ...puedes agregar más catálogos si es necesario
+  { value: 'categorias-gasto', label: 'Categorías de Gasto' },
+  { value: 'solicitantes', label: 'Solicitantes' }
 ];
-
-const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080';
 
 const AdminCatalogosUpload: React.FC = () => {
   const [catalog, setCatalog] = useState(CATALOG_OPTIONS[0].value);
@@ -27,18 +24,21 @@ const AdminCatalogosUpload: React.FC = () => {
     setLoading(true);
     setResult(null);
 
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('replaceAll', String(replaceAll));
-
     try {
-      const response = await fetch(`${API_BASE_URL}/api/${catalog}/import-csv`, {
-        method: 'POST',
-        body: formData,
-        // Agrega headers de autenticación si es necesario
-      });
-      const data = await response.json();
-      if (response.ok && data.success) {
+      // Verificar si hay token antes de hacer la petición
+      const token = localStorage.getItem('access_token');
+      if (!token) {
+        setResult({ 
+          type: 'error', 
+          message: 'No hay sesión activa. Por favor inicia sesión nuevamente.' 
+        });
+        return;
+      }
+
+      // Usar la función centralizada de services.ts
+      const data = await importCatalogCSV(catalog, file, replaceAll);
+      
+      if (data.success) {
         setResult({
           type: 'success',
           message: `Importación exitosa: ${data.successCount} registros importados.`,

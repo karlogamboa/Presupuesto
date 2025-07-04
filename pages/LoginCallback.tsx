@@ -55,7 +55,16 @@ const LoginCallback: React.FC = () => {
     return <div>{error}</div>;
   }
 
-  return <div>Procesando inicio de sesión...</div>;
+  (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
+      <img
+        src="https://www.circulodecredito.com.mx/documents/10588964/0/cdc-logo-negro.svg"
+        alt="Círculo de Crédito"
+        style={{ width: 180, marginBottom: 24 }}
+      />
+      <div>Procesando inicio de sesión...</div>
+    </div>
+  )
 };
 
 export default LoginCallback;

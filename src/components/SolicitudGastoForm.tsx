@@ -62,17 +62,12 @@ function useDepartamentos(setDepartamentosData: (data: any[]) => void, setDepart
     fetchDepartamentos()
       .then((data: any[]) => {
         setDepartamentosData(data || []);
+        // Ahora data ya contiene departamentos únicos con sus subdepartamentos agrupados
         setDepartamentos(
-          (data || []).map((dep: any) => {
-            let nombreDep = dep.departamento ?? dep.Departamento ?? dep.Area ?? dep.area ?? '';
-            if (nombreDep.includes(' : ')) {
-              nombreDep = nombreDep.split(' : ')[0].trim();
-            }
-            return {
-              value: String(nombreDep),
-              label: nombreDep
-            };
-          })
+          (data || []).map((dep: any) => ({
+            value: dep.value || dep.departamento || '',
+            label: dep.label || dep.departamento || ''
+          }))
         );
       })
       .catch((error) => console.error("Error al cargar departamentos:", error));
@@ -103,8 +98,8 @@ function useProveedores(setProveedores: (opts: Option[]) => void) {
     fetchProveedores()
       .then((data: any[]) => {
         const lista = (data || []).map((d: any) => ({
-          value: String(d.nombre || d.Nombre || d.id || '').trim(),
-          label: String(d.nombre || d.Nombre || '').trim(),
+          value: String(d.nombre || d.id || '').trim(),
+          label: String(d.nombre || '').trim(),
           numeroEmpleado: d.numeroProveedor || d['Número Proveedor'] || '',
           cuentaGastos: typeof d.cuentasGasto === 'string'
             ? d.cuentasGasto
@@ -138,14 +133,14 @@ function getCentroCostosFromSubDepartamento(subDepartamento: string) {
 
 function parseEmpleadoData(data: any) {
   // Extraer nombre del solicitante
-  const nombre = data?.Nombre ?? data?.nombre ?? '';
+  const nombre = data?.nombre ?? '';
   // Extraer correo electrónico
   const correo = data?.['Correo electrónico'] ?? data?.correo ?? '';
   // Procesar departamento y subdepartamento
   let departamento = '';
   let subDepartamento = '';
   let centroCostosCalculado = '';
-  const deptStr = data?.Departamento ?? data?.departamento ?? '';
+  const deptStr = data?.departamento ?? '';
   if (deptStr) {
     const deptParts = deptStr.split(' : ');
     if (deptParts.length > 1) {
@@ -180,7 +175,7 @@ function parseEmpleadoData(data: any) {
     departamento,
     subDepartamento,
     centroCostos: centroCostosCalculado,
-    empresa: data?.Subsidiaria ?? data?.subsidiaria ?? data?.empresa ?? ''
+    empresa: data?.subsidiaria ?? data?.empresa ?? ''
   };
 }
 
@@ -240,7 +235,7 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
       fetchResultados(numeroEmpleado).then(() => {});
       fetchSolicitanteByNumeroEmpleado(numeroEmpleado)
         .then((data: any) => {
-          if (!data || !data.Nombre) {
+          if (!data || !data.nombre) {
             setForm(f => ({
               ...f,
               solicitante: '',
@@ -290,7 +285,7 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
         fetchResultados(nuevoNumeroEmpleado).then(() => {});
         fetchSolicitanteByNumeroEmpleado(nuevoNumeroEmpleado)
           .then((data: any) => {
-            if (!data || !data.Nombre) {
+            if (!data || !data.nombre) {
               setForm(f => ({
                 ...f,
                 solicitante: '',
@@ -341,12 +336,8 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
   useEffect(() => {
     if (form.departamento) {
       const depObj = departamentosData.find(d => {
-        const depName = d.departamento || d.Departamento || d.Area || d.area;
-        if (depName && depName.includes(' : ')) {
-          const mainDep = depName.split(' : ')[0].trim();
-          return mainDep === form.departamento;
-        }
-        return depName === form.departamento;
+        // Buscar por el valor del departamento directamente
+        return d.value === form.departamento || d.departamento === form.departamento;
       });
       if (depObj && Array.isArray(depObj.subdepartamentos)) {
         if (form.subDepartamento && !depObj.subdepartamentos.includes(form.subDepartamento)) {
@@ -396,8 +387,14 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
     if (selectedProvider.cuentaGastos && selectedProvider.cuentaGastos.trim() !== '') {
       const cuentasProveedor = selectedProvider.cuentaGastos.split(',').map(cuenta => cuenta.trim().toLowerCase());
       const nuevasCategoriasFiltradas = categorias.filter(categoria => {
-        const categoriaNombre = categoria.label.toLowerCase();
-        return cuentasProveedor.some(cuenta => categoriaNombre.endsWith(cuenta));
+        const categoriaValue = categoria.value.toLowerCase();
+        const categoriaLabel = categoria.label.toLowerCase();
+        // Buscar coincidencias tanto en el value como en el label
+        return cuentasProveedor.some(cuenta => 
+          categoriaValue.includes(cuenta) || 
+          categoriaLabel.includes(cuenta) ||
+          cuenta.includes(categoriaValue)
+        );
       });
       setCategoriasFiltradas(nuevasCategoriasFiltradas.map(categoria => ({
         ...categoria,
@@ -445,7 +442,7 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
       if (value.trim()) {
         fetchSolicitanteByNumeroEmpleado(value.trim())
           .then((data: any) => {
-            if (!data || !data.Nombre) {
+            if (!data || !data.nombre) {
               setForm(f => ({
                 ...f,
                 solicitante: '',
@@ -539,12 +536,18 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
     );
     if (provObject) {
       setSelectedProvider(provObject);
-      // Filtra categorías según el proveedor
+      // Filtra categorías según el proveedor usando la misma lógica
       if (provObject.cuentaGastos && provObject.cuentaGastos.trim() !== '') {
         const cuentasProveedor = provObject.cuentaGastos.split(',').map(cuenta => cuenta.trim().toLowerCase());
-        const nuevasCategoriasFiltradas = categorias.filter(categoria =>
-          cuentasProveedor.some(cuenta => categoria.label.toLowerCase().endsWith(cuenta))
-        );
+        const nuevasCategoriasFiltradas = categorias.filter(categoria => {
+          const categoriaValue = categoria.value.toLowerCase();
+          const categoriaLabel = categoria.label.toLowerCase();
+          return cuentasProveedor.some(cuenta => 
+            categoriaValue.includes(cuenta) || 
+            categoriaLabel.includes(cuenta) ||
+            cuenta.includes(categoriaValue)
+          );
+        });
         setCategoriasFiltradas(nuevasCategoriasFiltradas);
       } else {
         setCategoriasFiltradas(categorias);
@@ -981,11 +984,22 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
                         setSelectedProvider(prov);
                         setProveedor(prov.value); 
                         setProveedorInput(prov.label);
-                        const cuentasProveedor = prov.cuentaGastos?.split(',').map((cuenta: string) => cuenta.trim().toLowerCase()) || [];
-                        const nuevasCategoriasFiltradas = categorias.filter(categoria =>
-                          cuentasProveedor.includes(categoria.value.toLowerCase())
-                        );
-                        setCategoriasFiltradas(nuevasCategoriasFiltradas);
+                        // Aplicar el mismo filtrado que el useEffect
+                        if (prov.cuentaGastos && prov.cuentaGastos.trim() !== '') {
+                          const cuentasProveedor = prov.cuentaGastos.split(',').map((cuenta: string) => cuenta.trim().toLowerCase());
+                          const nuevasCategoriasFiltradas = categorias.filter(categoria => {
+                            const categoriaValue = categoria.value.toLowerCase();
+                            const categoriaLabel = categoria.label.toLowerCase();
+                            return cuentasProveedor.some(cuenta => 
+                              categoriaValue.includes(cuenta) || 
+                              categoriaLabel.includes(cuenta) ||
+                              cuenta.includes(categoriaValue)
+                            );
+                          });
+                          setCategoriasFiltradas(nuevasCategoriasFiltradas);
+                        } else {
+                          setCategoriasFiltradas(categorias);
+                        }
                       }}
                       style={{
                         padding: 12,
@@ -1008,11 +1022,22 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
                           setSelectedProvider(prov);
                           setProveedor(prov.value); 
                           setProveedorInput(prov.label);
-                          const cuentasProveedor = prov.cuentaGastos?.split(',').map((cuenta: string) => cuenta.trim().toLowerCase()) || [];
-                          const nuevasCategoriasFiltradas = categorias.filter(categoria =>
-                            cuentasProveedor.includes(categoria.value.toLowerCase())
-                          );
-                          setCategoriasFiltradas(nuevasCategoriasFiltradas);
+                          // Aplicar el mismo filtrado que el useEffect
+                          if (prov.cuentaGastos && prov.cuentaGastos.trim() !== '') {
+                            const cuentasProveedor = prov.cuentaGastos.split(',').map((cuenta: string) => cuenta.trim().toLowerCase());
+                            const nuevasCategoriasFiltradas = categorias.filter(categoria => {
+                              const categoriaValue = categoria.value.toLowerCase();
+                              const categoriaLabel = categoria.label.toLowerCase();
+                              return cuentasProveedor.some(cuenta => 
+                                categoriaValue.includes(cuenta) || 
+                                categoriaLabel.includes(cuenta) ||
+                                cuenta.includes(categoriaValue)
+                              );
+                            });
+                            setCategoriasFiltradas(nuevasCategoriasFiltradas);
+                          } else {
+                            setCategoriasFiltradas(categorias);
+                          }
                         }
                       }}
                       aria-pressed={isSelected}

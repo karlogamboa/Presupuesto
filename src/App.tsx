@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import SolicitudGastoForm from './components/SolicitudGastoForm';
 import ResultadosTabla from './components/ResultadosTabla';
 import { fetchResultados } from './services';
@@ -31,6 +31,15 @@ function App() {
   const [filtroEstatus, setFiltroEstatus] = useState<string>('Todos');
   const [numeroEmpleadoFiltro, setNumeroEmpleadoFiltro] = useState<string>('');
   const [errorMessages, setErrorMessages] = useState<ErrorMessage[]>([]);
+  // Referencia para almacenar los timers de los mensajes de error
+  const errorTimersRef = useRef<Record<number, NodeJS.Timeout>>({});
+
+  useEffect(() => {
+    // Limpiar todos los temporizadores cuando el componente se desmonte
+    return () => {
+      Object.values(errorTimersRef.current).forEach(timer => clearTimeout(timer));
+    };
+  }, []);
 
   useEffect(() => {
     if (numeroEmpleadoFiltro) {
@@ -54,10 +63,32 @@ function App() {
   }, [numeroEmpleadoFiltro]);
 
   const addErrorMessage = (text: string) => {
-    setErrorMessages(prev => [...prev, { id: Date.now(), text }]);
+    const id = Date.now();
+    setErrorMessages(prev => [...prev, { id, text }]);
+    
+    // Limpiar temporizador existente si hay alguno con el mismo ID (aunque no debería ocurrir)
+    if (errorTimersRef.current[id]) {
+      clearTimeout(errorTimersRef.current[id]);
+    }
+    
+    // Configurar un temporizador para eliminar automáticamente el mensaje después de 15 segundos
+    const timer = setTimeout(() => {
+      removeErrorMessage(id);
+      // Eliminar la referencia al temporizador cuando se ejecuta
+      delete errorTimersRef.current[id];
+    }, 15000);
+    
+    // Guardar referencia al temporizador
+    errorTimersRef.current[id] = timer;
   };
 
   const removeErrorMessage = (id: number) => {
+    // Limpiar el temporizador si existe
+    if (errorTimersRef.current[id]) {
+      clearTimeout(errorTimersRef.current[id]);
+      delete errorTimersRef.current[id];
+    }
+    
     setErrorMessages(prev => prev.filter(msg => msg.id !== id));
   };
 

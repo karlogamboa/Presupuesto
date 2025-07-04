@@ -1,5 +1,7 @@
+import type { OktaConfig } from './types/okta';
+
 // Usa variable de entorno para el backend, ideal para S3 estático
-const baseURL = import.meta.env.VITE_BACKEND_URL || 'https://ec2-3-148-196-75.us-east-2.compute.amazonaws.com:8080';
+const baseURL = import.meta.env.VITE_BACKEND_URL;
 
 function getAuthHeaders(): HeadersInit {
   const token = localStorage.getItem('access_token');
@@ -15,19 +17,6 @@ export async function fetchSolicitantes() {
   return res.json();
 }
 
-export async function fetchAreas() {
-  const res = await fetch(`${baseURL}/api/areas`, {
-    headers: { ...getAuthHeaders() }
-  });
-  return res.json();
-}
-
-export async function fetchSubDepartamentos(areaId: string) {
-  const res = await fetch(`${baseURL}/api/subdepartamentos?areaId=${areaId}`, {
-    headers: { ...getAuthHeaders() }
-  });
-  return res.json();
-}
 
 let departamentosPromise: Promise<any> | null = null;
 export async function fetchDepartamentos() {
@@ -35,7 +24,63 @@ export async function fetchDepartamentos() {
     departamentosPromise = fetch(`${baseURL}/api/departamentos`, {
       headers: { ...getAuthHeaders() }
     })
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) {
+          console.error('Error al obtener departamentos:', res.status);
+          throw new Error(`Error al obtener departamentos: ${res.status}`);
+        }
+        return res.json();
+      })
+      .then(data => {
+        console.log('Datos originales de departamentos:', data);
+        
+        /*
+        {
+            "id": "335957",
+            "nombreDepartamento": "COMERCIAL C.L.",
+            "subDepartamento": "335957-G. COMERCIAL LABORAL G",
+            "ceco": "335957"
+        }
+        */
+        // Normaliza los datos según la estructura observada
+        if (Array.isArray(data)) {
+          // Agrupa los datos por departamento para estructurar correctamente los subdepartamentos
+          const departamentosMap = new Map();
+          
+          data.forEach(item => {
+            const nombreDept = item.nombreDepartamento || '';
+            const subDept = item.subDepartamento || '';
+            
+            if (!departamentosMap.has(nombreDept)) {
+              departamentosMap.set(nombreDept, {
+                id: item.id || '',
+                nombreDepartamento: nombreDept,
+                departamento: nombreDept,
+                value: nombreDept,
+                label: nombreDept,
+                nombre: nombreDept,
+                subdepartamentos: []
+              });
+            }
+            
+            // Añade el subdepartamento si existe y no está ya en la lista
+            if (subDept && !departamentosMap.get(nombreDept).subdepartamentos.includes(subDept)) {
+              departamentosMap.get(nombreDept).subdepartamentos.push(subDept);
+            }
+          });
+          
+          // Convierte el Map a array y ordena los subdepartamentos
+          return Array.from(departamentosMap.values()).map(dept => ({
+            ...dept,
+            subdepartamentos: dept.subdepartamentos.sort()
+          }));
+        }
+        return data; // Si no es un array, devuelve los datos sin procesar
+      })
+      .catch(err => {
+        console.error('Error procesando departamentos:', err);
+        return []; // Devuelve un array vacío en caso de error
+      })
       .finally(() => {
         departamentosPromise = null;
       });
@@ -122,18 +167,6 @@ export async function fetchSolicitanteByNumeroEmpleado(numEmpleado: string) {
   // }
   // Normaliza el resultado para que siempre tenga las propiedades esperadas
   const data = await res.json();
-  // Renombra 'nombre' a 'Nombre' para compatibilidad con el frontend
-  if (data?.nombre && !data?.Nombre) {
-    data.Nombre = data.nombre;
-  }
-  // Renombra 'subsidiaria' a 'Subsidiaria' si es necesario
-  if (data?.subsidiaria && !data.Subsidiaria) {
-    data.Subsidiaria = data.subsidiaria;
-  }
-  // Renombra 'departamento' a 'Departamento' si es necesario
-  if (data?.departamento && !data.Departamento) {
-    data.Departamento = data.departamento;
-  }
   // Renombra 'correo' a 'Correo electrónico' si es necesario
   if (data?.correo && !data['Correo electrónico']) {
     data['Correo electrónico'] = data.correo;
@@ -230,14 +263,86 @@ export async function logout(token: string) {
 
 }
 
-// Obtener configuración de Okta HARDCODEADA temporalmente (async)
-export async function fetchOktaConfig() {
+// Obtiene la configuración de Okta desde el backend
+// export async function fetchOktaConfig(): Promise<OktaConfig> {
+//   try {
+//     const res = await fetch(`${baseURL}/api/okta-config`, {
+//       headers: { ...getAuthHeaders() }
+//     });
+//     if (!res.ok) {
+//       console.error('Error al obtener configuración de Okta:', res.status, res.statusText);
+//       throw new Error('Error al obtener configuración de Okta');
+//     }
+//     const config = await res.json();
+//     console.log('Configuración de Okta obtenida:', config);
+    
+//     // Asegurarse de que la respuesta tenga los campos necesarios
+//     if (!config.issuer || !config.clientId) {
+//       console.error('La configuración de Okta no contiene los campos requeridos:', config);
+//       throw new Error('Configuración de Okta incompleta');
+//     }
+    
+//     return {
+//       issuer: config.issuer,
+//       clientId: config.clientId,
+//       // Incluir otros campos si son necesarios según la interfaz OktaConfig
+//     };
+//   } catch (error) {
+//     console.error('Error al obtener configuración de Okta:', error);
+//     throw error;
+//   }
+// }
+
+// Versión hardcodeada (backup)
+export async function fetchOktaConfig(): Promise<OktaConfig> {
   return {
     issuer: 'https://trial-6802190.okta.com/oauth2/default',
-    clientId: '0oasv2pcg4hRbY5YV697',
-    redirectUri: window.location.origin + '/callback',
-    scopes: ['openid', 'profile', 'email'],
-    pkce: true,
+    clientId: '0oasv2pcg4hRbY5YV697'
+    // Nota: los campos adicionales como redirectUri, scopes, pkce no forman parte
+    // del tipo OktaConfig definido en types/okta.ts
   };
+}
+
+// Importar catálogos desde archivos CSV
+export async function importCatalogCSV(catalog: string, file: File, replaceAll: boolean) {
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('replaceAll', String(replaceAll));
+    
+    const response = await fetch(`${baseURL}/api/${catalog}/import-csv`, {
+      method: 'POST',
+      headers: {
+        ...getAuthHeaders()
+        // No incluimos Content-Type porque FormData lo establece automáticamente con el boundary
+      },
+      body: formData,
+    });
+    
+    const data = await response.json();
+    
+    // Si el servidor devuelve un error específico, incluirlo en la respuesta
+    if (!response.ok) {
+      console.error(`Error al importar catálogo ${catalog}:`, data);
+      return {
+        success: false,
+        message: data.message || `Error ${response.status}: ${response.statusText}`,
+        statusCode: response.status,
+        ...data
+      };
+    }
+    
+    return {
+      success: true,
+      ...data
+    };
+  } catch (error) {
+    console.error('Error en importación de catálogo:', error);
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : 'Error desconocido en la importación',
+      error: String(error)
+    };
+  }
 }
 
