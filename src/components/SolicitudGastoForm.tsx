@@ -97,17 +97,15 @@ function useProveedores(setProveedores: (opts: Option[]) => void) {
   useEffect(() => {
     fetchProveedores()
       .then((data: any[]) => {
-        const lista = (data || []).map((d: any) => ({
-          value: String(d.nombre || d.id || '').trim(),
-          label: String(d.nombre || '').trim(),
-          numeroEmpleado: d.numeroProveedor || d['Número Proveedor'] || '',
-          cuentaGastos: typeof d.cuentasGasto === 'string'
-            ? d.cuentasGasto
-            : Array.isArray(d.cuentasGasto)
-              ? d.cuentasGasto.join(', ')
-              : '',
-          categoriaGasto: d.categoria || d.Categoría || '',
-        }));
+        const lista = (data || []).map((d: any) => {
+          return {
+            value: String(d.nombre || d.id || '').trim(),
+            label: String(d.nombre || '').trim(),
+            numeroEmpleado: d.numeroProveedor || d['Número Proveedor'] || '',
+            cuentaGastos: d.cuentaGastos || '', // Ya normalizado en services.ts
+            categoriaGasto: d.categoria || d.Categoría || '',
+          };
+        });
         setProveedores(lista);
       })
       .catch((error) => console.error("Error al cargar proveedores:", error));
@@ -385,23 +383,33 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
       return;
     }
     if (selectedProvider.cuentaGastos && selectedProvider.cuentaGastos.trim() !== '') {
-      const cuentasProveedor = selectedProvider.cuentaGastos.split(',').map(cuenta => cuenta.trim().toLowerCase());
+      // Divide las cuentas del proveedor por comas y limpia espacios
+      const cuentasProveedor = selectedProvider.cuentaGastos.split(',').map(cuenta => cuenta.trim());
+      
       const nuevasCategoriasFiltradas = categorias.filter(categoria => {
-        const categoriaValue = categoria.value.toLowerCase();
-        const categoriaLabel = categoria.label.toLowerCase();
-        // Buscar coincidencias tanto en el value como en el label
-        return cuentasProveedor.some(cuenta => 
-          categoriaValue.includes(cuenta) || 
-          categoriaLabel.includes(cuenta) ||
-          cuenta.includes(categoriaValue)
-        );
+        // Busca coincidencias exactas con el label de la categoría (cuentaDeGastos)
+        const match = cuentasProveedor.some(cuentaProveedor => {
+          // Normalizamos quitando espacios extra y convirtiendo a minúsculas
+          const categoriaLabelNormalizado = normalizeText(categoria.label);
+          const cuentaProveedorNormalizada = normalizeText(cuentaProveedor);
+          return categoriaLabelNormalizado === cuentaProveedorNormalizada;
+        });
+        
+        return match;
       });
-      setCategoriasFiltradas(nuevasCategoriasFiltradas.map(categoria => ({
+      
+      // Filtrar duplicados por label
+      const categoriasSinDuplicados = nuevasCategoriasFiltradas.filter((categoria, index, self) =>
+        index === self.findIndex(c => c.label === categoria.label)
+      );
+      
+      setCategoriasFiltradas(categoriasSinDuplicados.map(categoria => ({
         ...categoria,
         label: categoria.label
       })));
-      if (nuevasCategoriasFiltradas.length === 1) {
-        const catUnica = nuevasCategoriasFiltradas[0];
+      
+      if (categoriasSinDuplicados.length === 1) {
+        const catUnica = categoriasSinDuplicados[0];
         setForm(prevForm => ({
           ...prevForm,
           categoriaGasto: catUnica.value,
@@ -538,15 +546,13 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
       setSelectedProvider(provObject);
       // Filtra categorías según el proveedor usando la misma lógica
       if (provObject.cuentaGastos && provObject.cuentaGastos.trim() !== '') {
-        const cuentasProveedor = provObject.cuentaGastos.split(',').map(cuenta => cuenta.trim().toLowerCase());
+        const cuentasProveedor = provObject.cuentaGastos.split(',').map(cuenta => cuenta.trim());
         const nuevasCategoriasFiltradas = categorias.filter(categoria => {
-          const categoriaValue = categoria.value.toLowerCase();
-          const categoriaLabel = categoria.label.toLowerCase();
-          return cuentasProveedor.some(cuenta => 
-            categoriaValue.includes(cuenta) || 
-            categoriaLabel.includes(cuenta) ||
-            cuenta.includes(categoriaValue)
-          );
+          return cuentasProveedor.some(cuentaProveedor => {
+            const categoriaLabelNormalizado = normalizeText(categoria.label);
+            const cuentaProveedorNormalizada = normalizeText(cuentaProveedor);
+            return categoriaLabelNormalizado === cuentaProveedorNormalizada;
+          });
         });
         setCategoriasFiltradas(nuevasCategoriasFiltradas);
       } else {
@@ -986,15 +992,13 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
                         setProveedorInput(prov.label);
                         // Aplicar el mismo filtrado que el useEffect
                         if (prov.cuentaGastos && prov.cuentaGastos.trim() !== '') {
-                          const cuentasProveedor = prov.cuentaGastos.split(',').map((cuenta: string) => cuenta.trim().toLowerCase());
+                          const cuentasProveedor = prov.cuentaGastos.split(',').map((cuenta: string) => cuenta.trim());
                           const nuevasCategoriasFiltradas = categorias.filter(categoria => {
-                            const categoriaValue = categoria.value.toLowerCase();
-                            const categoriaLabel = categoria.label.toLowerCase();
-                            return cuentasProveedor.some(cuenta => 
-                              categoriaValue.includes(cuenta) || 
-                              categoriaLabel.includes(cuenta) ||
-                              cuenta.includes(categoriaValue)
-                            );
+                            return cuentasProveedor.some(cuentaProveedor => {
+                              const categoriaLabelNormalizado = normalizeText(categoria.label);
+                              const cuentaProveedorNormalizada = normalizeText(cuentaProveedor);
+                              return categoriaLabelNormalizado === cuentaProveedorNormalizada;
+                            });
                           });
                           setCategoriasFiltradas(nuevasCategoriasFiltradas);
                         } else {
@@ -1024,15 +1028,13 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
                           setProveedorInput(prov.label);
                           // Aplicar el mismo filtrado que el useEffect
                           if (prov.cuentaGastos && prov.cuentaGastos.trim() !== '') {
-                            const cuentasProveedor = prov.cuentaGastos.split(',').map((cuenta: string) => cuenta.trim().toLowerCase());
+                            const cuentasProveedor = prov.cuentaGastos.split(',').map((cuenta: string) => cuenta.trim());
                             const nuevasCategoriasFiltradas = categorias.filter(categoria => {
-                              const categoriaValue = categoria.value.toLowerCase();
-                              const categoriaLabel = categoria.label.toLowerCase();
-                              return cuentasProveedor.some(cuenta => 
-                                categoriaValue.includes(cuenta) || 
-                                categoriaLabel.includes(cuenta) ||
-                                cuenta.includes(categoriaValue)
-                              );
+                              return cuentasProveedor.some(cuentaProveedor => {
+                                const categoriaLabelNormalizado = normalizeText(categoria.label);
+                                const cuentaProveedorNormalizada = normalizeText(cuentaProveedor);
+                                return categoriaLabelNormalizado === cuentaProveedorNormalizada;
+                              });
                             });
                             setCategoriasFiltradas(nuevasCategoriasFiltradas);
                           } else {
@@ -1174,3 +1176,17 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
 };
 
 export default SolicitudGastoForm;
+
+// Función para normalizar texto para comparaciones
+function normalizeText(text: string): string {
+  return text
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ') // Reemplaza múltiples espacios con uno solo
+    .replace(/[áàäâã]/g, 'a')
+    .replace(/[éèëê]/g, 'e')
+    .replace(/[íìïî]/g, 'i')
+    .replace(/[óòöô]/g, 'o')
+    .replace(/[úùüû]/g, 'u')
+    .replace(/[ñ]/g, 'n');
+}

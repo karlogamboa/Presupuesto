@@ -32,8 +32,6 @@ export async function fetchDepartamentos() {
         return res.json();
       })
       .then(data => {
-        console.log('Datos originales de departamentos:', data);
-        
         /*
         {
             "id": "335957",
@@ -102,11 +100,10 @@ export async function fetchProveedores() {
           value: prov.nombre || prov.id || '', // value para selects
           label: prov.nombre || '', // label para selects
           numeroEmpleado: prov.numeroProveedor || '', // para compatibilidad con UI
-          cuentaGastos: typeof prov.cuentasGasto === 'string'
-            ? prov.cuentasGasto
-            : Array.isArray(prov.cuentasGasto)
-              ? prov.cuentasGasto.join(', ')
-              : '',
+          cuentaGastos: prov.cuentasGasto || 
+            (typeof prov.cuentasGastos === 'string' ? prov.cuentasGastos : '') ||
+            (Array.isArray(prov.cuentasGastos) ? prov.cuentasGastos.join(', ') : '') ||
+            '',
           categoriaGasto: prov.categoria || '',
           subsidiariaPrincipal: prov.subsidiariaPrincipal || '',
         }));
@@ -129,8 +126,8 @@ export async function fetchCategoriasGasto() {
         // Normaliza para que cada categoría tenga value, label, cuenta, descripcion, etc.
         return (data || []).map((cat: any) => ({
           ...cat,
-          value: cat.cuenta || '', // value para selects
-          label:cat.cuentaDeGastos ||  '', // label para selects
+          value: cat.cuenta || cat.id || '', // value para selects
+          label: cat.cuentaDeGastos || cat.nombre || '', // label para selects (priorizar cuentaDeGastos)
           nombre: cat.nombre || '',
           descripcion: cat.descripcion || '',
           saldo: cat.saldo,
@@ -192,8 +189,8 @@ export async function fetchResultados(numEmpleado?: string) {
 }
 
 export async function editarEstatusSolicitud(estatusConfirmacion: string, solicitud: any) {
-  const res = await fetch(`${baseURL}/api/solicitudes-presupuesto/editar-estatus`, {
-    method: 'POST',
+  const res = await fetch(`${baseURL}/api/solicitudes-presupuesto/cambiar-estatus`, {
+    method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify({ estatusConfirmacion, solicitud }),
   });
