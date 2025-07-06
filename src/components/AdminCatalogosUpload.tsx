@@ -5,7 +5,8 @@ const CATALOG_OPTIONS = [
   { value: 'proveedores', label: 'Proveedores' },
   { value: 'departamentos', label: 'Departamentos' },
   { value: 'categorias-gasto', label: 'Categorías de Gasto' },
-  { value: 'solicitantes', label: 'Solicitantes' }
+  { value: 'solicitantes', label: 'Solicitantes' },
+  { value: 'usuarios', label: 'Usuarios' },
 ];
 
 const AdminCatalogosUpload: React.FC = () => {

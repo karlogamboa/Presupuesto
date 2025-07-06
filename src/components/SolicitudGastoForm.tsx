@@ -28,6 +28,8 @@ interface FormData {
   cuentaGastos: string;
   montoSubtotal: string;
   correo: string;
+  proveedor?: string;
+  periodoPresupuesto?: string;
 }
 
 const initialForm: FormData = {
@@ -40,6 +42,8 @@ const initialForm: FormData = {
   cuentaGastos: '',
   montoSubtotal: '',
   correo: '',
+  proveedor: '',
+  periodoPresupuesto: '',
 };
 
 // Helper hooks and functions extracted for clarity and reduced complexity
@@ -505,9 +509,11 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
       if (provObject) {
         setSelectedProvider(provObject);
         setProveedor(value);
+        setForm(f => ({ ...f, proveedor: provObject.label }));
       } else {
         setSelectedProvider(null);
         setProveedor('');
+        setForm(f => ({ ...f, proveedor: '' }));
       }
       setForm(f => ({ ...f, categoriaGasto: '', cuentaGastos: '' }));
     } else if (name === 'numeroEmpleado') {
@@ -544,6 +550,7 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
     );
     if (provObject) {
       setSelectedProvider(provObject);
+      setForm(f => ({ ...f, proveedor: provObject.label }));
       // Filtra categorías según el proveedor usando la misma lógica
       if (provObject.cuentaGastos && provObject.cuentaGastos.trim() !== '') {
         const cuentasProveedor = provObject.cuentaGastos.split(',').map(cuenta => cuenta.trim());
@@ -585,11 +592,19 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const categoriaSeleccionada = categoriasFiltradas.find(c => c.value === form.categoriaGasto);
+    const proveedorSeleccionado = selectedProvider;
     const payload = {
-      ...form,
+      solicitante: form.solicitante,
+      departamento: form.departamento,
+      numeroEmpleado: form.numeroEmpleado,
+      subDepartamento: form.subDepartamento,
+      centroCostos: form.centroCostos,
+      montoSubtotal: form.montoSubtotal,
+      correo: form.correo,
       empresa,
-      proveedor,
+      proveedor: proveedorSeleccionado?.label || proveedorInput || '',
       categoriaGasto: categoriaSeleccionada?.label || '',
+      cuentaGastos: categoriaSeleccionada?.value || form.cuentaGastos,
       periodoPresupuesto,
       Fecha: new Date().toISOString(),
     };
@@ -875,7 +890,10 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
             <select
               name="periodoPresupuesto"
               value={periodoPresupuesto}
-              onChange={e => setPeriodoPresupuesto(e.target.value)}
+              onChange={e => {
+                setPeriodoPresupuesto(e.target.value);
+                setForm(f => ({ ...f, periodoPresupuesto: e.target.value }));
+              }}
               required
               style={{
                 width: '100%',
@@ -943,6 +961,7 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
                     setSelectedProvider(null);
                     setProveedor('');
                     setProveedorInput('');
+                    setForm(f => ({ ...f, proveedor: '' }));
                     setCategoriasFiltradas(categorias); // Quitar el filtro de cuentas de gasto
                   }}
                 />
@@ -990,6 +1009,7 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
                         setSelectedProvider(prov);
                         setProveedor(prov.value); 
                         setProveedorInput(prov.label);
+                        setForm(f => ({ ...f, proveedor: prov.label }));
                         // Aplicar el mismo filtrado que el useEffect
                         if (prov.cuentaGastos && prov.cuentaGastos.trim() !== '') {
                           const cuentasProveedor = prov.cuentaGastos.split(',').map((cuenta: string) => cuenta.trim());
@@ -1026,6 +1046,7 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
                           setSelectedProvider(prov);
                           setProveedor(prov.value); 
                           setProveedorInput(prov.label);
+                          setForm(f => ({ ...f, proveedor: prov.label }));
                           // Aplicar el mismo filtrado que el useEffect
                           if (prov.cuentaGastos && prov.cuentaGastos.trim() !== '') {
                             const cuentasProveedor = prov.cuentaGastos.split(',').map((cuenta: string) => cuenta.trim());
