@@ -1,13 +1,38 @@
+import { config } from './config';
+
 // Usa variable de entorno para el backend con API Gateway
-const baseURL = import.meta.env.VITE_LAMBDA_URL;
+const baseURL = config.API_BASE_URL;
 
 function getAuthHeaders(): HeadersInit {
+  // En modo desarrollo sin auth, no enviar headers de autorización
+  if (config.DEVELOPMENT_MODE && !config.AUTH_ENABLED) {
+    return {};
+  }
+  
   const token = localStorage.getItem('access_token') || localStorage.getItem('api_gateway_token');
   return token ? { 'Authorization': `Bearer ${token}` } : {};
 }
 
 // Función para login con API Gateway Authorizer
 export async function loginWithApiGateway(credentials: { username: string; password: string }) {
+  // En modo desarrollo, simular login exitoso
+  if (config.DEVELOPMENT_MODE && !config.AUTH_ENABLED) {
+    // Simular token falso para desarrollo
+    const fakeToken = btoa(JSON.stringify({
+      ...config.DEFAULT_DEV_USER,
+      exp: Math.floor(Date.now() / 1000) + (24 * 60 * 60) // Expira en 24 horas
+    }));
+    
+    localStorage.setItem('access_token', fakeToken);
+    localStorage.setItem('api_gateway_token', fakeToken);
+    
+    return { 
+      token: fakeToken, 
+      user: config.DEFAULT_DEV_USER,
+      message: 'Login en modo desarrollo'
+    };
+  }
+  
   try {
     const res = await fetch(`${baseURL}/api/auth/login`, {
       method: 'POST',
@@ -36,6 +61,12 @@ export async function loginWithApiGateway(credentials: { username: string; passw
 
 // Función para validar token con API Gateway
 export async function validateToken(): Promise<boolean> {
+  // En modo desarrollo sin auth, siempre válido si hay token
+  if (config.DEVELOPMENT_MODE && !config.AUTH_ENABLED) {
+    const token = localStorage.getItem('access_token');
+    return !!token;
+  }
+  
   try {
     const token = localStorage.getItem('access_token');
     if (!token) return false;
@@ -44,14 +75,25 @@ export async function validateToken(): Promise<boolean> {
       headers: { ...getAuthHeaders() }
     });
     
-    return res.ok;
-  } catch {
+    if (!res.ok) {
+      console.warn(`Token validation failed: ${res.status} ${res.statusText}`);
+      return false;
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error validating token:', error);
     return false;
   }
 }
 
 // Función para obtener información del usuario
 export async function fetchUserInfo(email?: string) {
+  // En modo desarrollo, retornar usuario por defecto
+  if (config.DEVELOPMENT_MODE && !config.AUTH_ENABLED) {
+    return config.DEFAULT_DEV_USER;
+  }
+  
   const payload = email ? { email } : {};
   const res = await fetch(`${baseURL}/api/userInfo`, {
     method: 'POST',
@@ -64,6 +106,14 @@ export async function fetchUserInfo(email?: string) {
 
 // Función de logout actualizada
 export async function logout() {
+  // En modo desarrollo, solo limpiar localStorage
+  if (config.DEVELOPMENT_MODE && !config.AUTH_ENABLED) {
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('api_gateway_token');
+    localStorage.removeItem('id_token');
+    return;
+  }
+  
   try {
     const token = localStorage.getItem('access_token');
     if (token) {
