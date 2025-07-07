@@ -22,7 +22,7 @@ const LoginPage: React.FC = () => {
       Iniciar sesión con Okta
       </button>
       <p>
-      * Copyright (c) 2025 Círculo de Crédito Versión: 1.0.7
+      * Copyright (c) 2025 Círculo de Crédito Versión: 1.0.8
       <br />
       </p>
     </div>

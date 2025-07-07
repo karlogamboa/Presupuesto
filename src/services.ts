@@ -1,7 +1,7 @@
 import type { OktaConfig } from './types/okta';
 
 // Usa variable de entorno para el backend, ideal para S3 estático
-const baseURL = import.meta.env.VITE_BACKEND_URL;
+const baseURL = import.meta.env.VITE_LAMBDA_URL;
 
 function getAuthHeaders(): HeadersInit {
   const token = localStorage.getItem('access_token');
