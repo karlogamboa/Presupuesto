@@ -4,7 +4,6 @@ import ProtectedRoute from '../middleware/authMiddleware';
 import App from '../src/App';
 import Admin from '../src/components/Admin';
 import LoginPage from '../pages/LoginPage';
-import LoginCallback from '../pages/LoginCallback';
 import SendMailTest from '../src/components/SendMailTest';
 import AdminCatalogosUpload from '../src/components/AdminCatalogosUpload';
 
@@ -13,12 +12,11 @@ const RouterApp: React.FC = () => (
   <Router>
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/callback" element={<LoginCallback />} />
       <Route path="/SendMailTest" element={<SendMailTest />} />
       <Route
         path="/Admin"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute requiredRole="admin">
             <Admin />
           </ProtectedRoute>
         }
@@ -34,12 +32,12 @@ const RouterApp: React.FC = () => (
       <Route
         path="/AdminCatalogos"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute requiredRole="admin">
             <AdminCatalogosUpload />
           </ProtectedRoute>
         }
       />
-      <Route path="*" element={<Navigate to="/login" replace />} />
+      <Route path="*" element={<Navigate to="/Solicitud" replace />} />
     </Routes>
   </Router>
 );

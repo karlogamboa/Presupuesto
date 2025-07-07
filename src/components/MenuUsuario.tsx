@@ -72,17 +72,15 @@ const MenuUsuario: React.FC = () => {
 
   const handleLogout = async () => {
     try {
-      const token = localStorage.getItem('access_token');
-      if (token) {
-        await logout(token);
-      }
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('id_token');
-      localStorage.removeItem('okta_code_verifier');
-      sessionStorage.removeItem('okta_code_verifier');
+      await logout();
       window.location.href = '/login';
     } catch (error) {
-      console.error('Error al cerrar sesión:', error);
+      console.error('Error en logout:', error);
+      // Forzar logout local aunque falle el servidor
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('api_gateway_token');
+      localStorage.removeItem('id_token');
+      window.location.href = '/login';
     }
   };
 

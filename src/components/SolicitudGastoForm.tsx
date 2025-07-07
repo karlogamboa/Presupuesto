@@ -209,12 +209,12 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
     // Nuevo: Intenta obtener el correo del usuario logueado
     let correoUsuario: string | undefined = globalUserInfo?.email;
 
-    // 2. Si no está en la variable global, intenta obtenerlo del id_token (tras login o refresh)
+    // 2. Si no está en la variable global, intenta obtenerlo del access_token (API Gateway token)
     if (!numeroEmpleado || !correoUsuario) {
-      const idToken = localStorage.getItem('id_token');
-      if (idToken) {
+      const accessToken = localStorage.getItem('access_token');
+      if (accessToken) {
         try {
-          const payload = JSON.parse(atob(idToken.split('.')[1]));
+          const payload = JSON.parse(atob(accessToken.split('.')[1]));
           if (!numeroEmpleado)
             numeroEmpleado = payload.numeroEmpleado || payload.numero_empleado || payload.numEmpleado;
           if (!correoUsuario)
