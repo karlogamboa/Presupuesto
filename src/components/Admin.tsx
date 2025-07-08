@@ -130,8 +130,9 @@ const Admin: React.FC = () => {
 
     editarEstatusSolicitud(nuevoEstatus, solicitud)
       .then(response => {
-        if (!response || response?.error) {
-          alert(`Error en la petición: ${response?.error || 'Error desconocido'}`);
+        if (!response || response.success !== true) {
+          alert(`Error en la petición: ${response?.error || response?.message || 'Error desconocido'}`);
+          // No actualizar el estado si no fue exitoso
         } else {
           const actualizadas = solicitudes.map(s =>
             s === solicitud ? { ...s, estatusConfirmacion: nuevoEstatus } : s

@@ -43,7 +43,19 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole 
         if (isValid && requiredRole) {
           // Obtener información del usuario para verificar rol
           const userInfo = await fetchUserInfo();
-          setRole(userInfo?.rol || userInfo?.role || null);
+          // Soporta roles como arreglo o string
+          let userRoles: string[] = [];
+          if (Array.isArray(userInfo?.roles)) {
+            userRoles = userInfo.roles.map((r: string) => r.trim().toLowerCase());
+          } else if (typeof userInfo?.roles === 'string') {
+            userRoles = userInfo.roles.split(',').map((r: string) => r.trim().toLowerCase());
+          } else if (userInfo?.role) {
+            userRoles = [String(userInfo.role).trim().toLowerCase()];
+          } else if (userInfo?.rol) {
+            userRoles = [String(userInfo.rol).trim().toLowerCase()];
+          }
+          setRole(userRoles.join(', '));
+          // Si el requiredRole no está en los roles, el acceso será denegado abajo
         }
       } catch {
         setAuth(false);
@@ -78,7 +90,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole 
   }
 
   // Verificar rol si es requerido
-  if (requiredRole && role !== requiredRole) {
+  if (requiredRole && !(role && role.split(',').map(r => r.trim().toLowerCase()).includes(requiredRole.trim().toLowerCase()))) {
     return (
       <div style={{ 
         display: 'flex', 

@@ -3,10 +3,22 @@ import { config } from './config';
 // Usa variable de entorno para el backend con API Gateway
 const baseURL = config.API_BASE_URL;
 
+// Valida que baseURL esté definida
+if (!baseURL) {
+  throw new Error('API_BASE_URL (VITE_LAMBDA_URL) no está definida. Revisa tu archivo .env y reinicia el servidor.');
+}
+
 function getAuthHeaders(): HeadersInit {
-  // En modo desarrollo sin auth, no enviar headers de autorización
+  // En modo desarrollo sin auth, enviar headers de usuario mock
   if (config.DEVELOPMENT_MODE && !config.AUTH_ENABLED) {
-    return {};
+    return {
+      'x-user-email': String(config.DEFAULT_DEV_USER.email).trim().toLowerCase(),
+      'x-user-roles': Array.isArray(config.DEFAULT_DEV_USER.roles)
+        ? config.DEFAULT_DEV_USER.roles.map(r => String(r).trim().toLowerCase()).join(',')
+        : String(config.DEFAULT_DEV_USER.roles).trim().toLowerCase(),
+      'x-user-numeroEmpleado': String(config.DEFAULT_DEV_USER.numeroEmpleado).trim(),
+      'x-user-id': String(config.DEFAULT_DEV_USER.numeroEmpleado).trim()
+    };
   }
   
   const token = localStorage.getItem('access_token') || localStorage.getItem('api_gateway_token');
@@ -318,9 +330,10 @@ export async function fetchResultados(numEmpleado?: string) {
 }
 
 export async function editarEstatusSolicitud(estatusConfirmacion: string, solicitud: any) {
+  let headers: HeadersInit = { 'Content-Type': 'application/json', ...getAuthHeaders() };
   const res = await fetch(`${baseURL}/api/solicitudes-presupuesto/cambiar-estatus`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    headers,
     body: JSON.stringify({ estatusConfirmacion, solicitud }),
   });
   return res.json();

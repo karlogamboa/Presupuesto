@@ -11,7 +11,7 @@ export function setGlobalUserInfo(user: typeof globalUserInfo) {
 }
 
 const MenuUsuario: React.FC = () => {
-  const [user, setUser] = useState<{ email?: string; name?: string; role?: string | string[]; numeroEmpleado?: string } | null>(null);
+  const [user, setUser] = useState<{ email?: string; name?: string; roles?: string | string[]; numeroEmpleado?: string } | null>(null);
   const navigate = useNavigate();
   const fetchedRef = useRef(false);
 
@@ -28,24 +28,24 @@ const MenuUsuario: React.FC = () => {
     // Primero intenta obtener el email y el rol del id_token
     const idToken = localStorage.getItem('id_token');
     let email: string | undefined = undefined;
-    let role: string | string[] | undefined = undefined;
+    let roles: string | string[] | undefined = undefined;
     let numeroEmpleado: string | undefined = undefined;
     if (idToken) {
       try {
         const payload = JSON.parse(atob(idToken.split('.')[1]));
         email = payload.email;
-        role = payload.role || payload.roles;
+        roles = payload.role || payload.roles;
         numeroEmpleado = payload.numeroEmpleado || payload.numero_empleado;
       } catch {
         // No email ni role
       }
     }
     // Si ya hay rol y numeroEmpleado, setea ambos y la variable global, pero no vuelvas a hacer fetch
-    if (role && numeroEmpleado) {
+    if (roles && numeroEmpleado) {
       const userObj = {
         email,
         name: email,
-        role,
+        roles,
         numeroEmpleado,
       };
       setUser(userObj);
@@ -58,7 +58,7 @@ const MenuUsuario: React.FC = () => {
         const userObj = {
           email: data.email,
           name: data.name || data.preferred_username || data.email,
-          role: data.role || data.roles,
+          roles: data.role || data.roles,
           numeroEmpleado: data.numeroEmpleado || data.numero_empleado,
         };
         setUser(userObj);
@@ -88,8 +88,9 @@ const MenuUsuario: React.FC = () => {
 
   // Determina si el usuario es admin
   const isAdmin =
-    user.role === 'Admin' ||
-    (Array.isArray(user.role) && user.role.includes('Admin'));
+    user.roles === 'ADMIN' ||
+    (typeof user.roles === 'string' && user.roles.includes('ADMIN')) ||
+    (Array.isArray(user.roles) && user.roles.includes('ADMIN'));
 
   return (
     <div

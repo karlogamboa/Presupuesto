@@ -13,7 +13,7 @@ export const config = {
   DEFAULT_DEV_USER: {
     email: 'dev@circulodecredito.com',
     name: 'Usuario Desarrollo',
-    role: 'admin',
-    numeroEmpleado: '12345'
+    roles: ['ADMIN'], // Cambiado a arreglo para compatibilidad con split/join
+    numeroEmpleado: '7854'
   }
 };

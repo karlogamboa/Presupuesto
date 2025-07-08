@@ -12,12 +12,16 @@ const RouterApp: React.FC = () => (
   <Router>
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/SendMailTest" element={<SendMailTest />} />
-      
+      <Route path="/SendMailTest" element={
+        <ProtectedRoute requiredRole="ADMIN">
+          <SendMailTest />
+        </ProtectedRoute>
+      } />
+
       <Route
         path="/Admin"
         element={
-          <ProtectedRoute requiredRole="admin">
+          <ProtectedRoute requiredRole="ADMIN">
             <Admin />
           </ProtectedRoute>
         }
@@ -33,7 +37,7 @@ const RouterApp: React.FC = () => (
       <Route
         path="/AdminCatalogos"
         element={
-          <ProtectedRoute requiredRole="admin">
+          <ProtectedRoute requiredRole="ADMIN">
             <AdminCatalogosUpload />
           </ProtectedRoute>
         }
