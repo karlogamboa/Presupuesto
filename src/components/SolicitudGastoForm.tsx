@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   fetchDepartamentos,
   fetchCategoriasGasto,
@@ -8,6 +8,7 @@ import {
   fetchResultados // <-- Importa fetchResultados si lo usas aquí
 } from '../services';
 import { globalUserInfo } from './MenuUsuario';
+import { toast } from 'react-toastify';
 
 interface Option {
   value: string;
@@ -194,13 +195,10 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
   const [empresa, setEmpresa] = useState<string>('');
   const [categoriasFiltradas, setCategoriasFiltradas] = useState<Option[]>([]);
   const [selectedProvider, setSelectedProvider] = useState<Option | null>(null);
-  const [errorPopups, setErrorPopups] = useState<{ id: number; message: string }[]>([]);
-  const errorTimeoutsRef = useRef<{ [id: number]: ReturnType<typeof setTimeout> }>({});
-  const nextErrorId = useRef(1);
-  const [numEmpleadoTimeout, setNumEmpleadoTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
+  const [numeroEmpleadoCargado, setNumeroEmpleadoCargado] = useState<string>('');
+  const [numEmpleadoTimeout, setNumEmpleadoTimeout] = useState<NodeJS.Timeout | null>(null);
   const periodos = usePeriodos();
   const [periodoPresupuesto, setPeriodoPresupuesto] = useState<string>('');
-  const [numeroEmpleadoCargado, setNumeroEmpleadoCargado] = useState<string>('');
 
   // useEffect principal para cargar el número de empleado al montar el componente
   useEffect(() => {
@@ -449,7 +447,10 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
       subDepartamento: '',
       centroCostos: ''
     }));
-    if (numEmpleadoTimeout) clearTimeout(numEmpleadoTimeout);
+    if (numEmpleadoTimeout) {
+      clearTimeout(numEmpleadoTimeout);
+      setNumEmpleadoTimeout(null);
+    }
     const timeout = setTimeout(() => {
       if (value.trim()) {
         fetchSolicitanteByNumeroEmpleado(value.trim())
@@ -571,24 +572,6 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
     }
   };
 
-  const showErrorPopup = (message: string) => {
-    const id = nextErrorId.current++;
-    setErrorPopups(prev => [...prev, { id, message }]);
-    const timeout = setTimeout(() => {
-      setErrorPopups(prev => prev.filter(p => p.id !== id));
-      delete errorTimeoutsRef.current[id];
-    }, 8000);
-    errorTimeoutsRef.current[id] = timeout;
-  };
-
-  const closeErrorPopup = (id: number) => {
-    setErrorPopups(prev => prev.filter(p => p.id !== id));
-    if (errorTimeoutsRef.current[id]) {
-      clearTimeout(errorTimeoutsRef.current[id]);
-      delete errorTimeoutsRef.current[id];
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const categoriaSeleccionada = categoriasFiltradas.find(c => c.value === form.categoriaGasto);
@@ -611,11 +594,11 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
     try {
       const data = await guardarPresupuesto(payload);
       if (!data || data?.error) {
-        showErrorPopup(data?.error || 'Error al guardar el presupuesto');
+        toast.error(data?.error || 'Error al guardar el presupuesto');
         return;
       }
     } catch (error: any) {
-      showErrorPopup('Error en la petición: ' + (error?.message || error));
+      toast.error('Error en la petición: ' + (error?.message || error));
       return;
     }
     onSubmit(form);
@@ -635,59 +618,6 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
 
   return (
     <>
-      {/* Popups de error apilados */}
-      <div style={{
-        position: 'fixed',
-        top: 24,
-        right: 24,
-        zIndex: 3000,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'flex-end',
-        gap: 12,
-        pointerEvents: 'none'
-      }}>
-        {errorPopups.map((popup) => (
-          <div
-            key={popup.id}
-            style={{
-              background: theme === 'dark' ? '#e57373' : '#ff5252',
-              color: '#fff',
-              padding: '18px 48px 18px 24px',
-              borderRadius: 10,
-              boxShadow: '0 2px 12px #0003',
-              minWidth: 260,
-              maxWidth: 380,
-              fontWeight: 600,
-              fontSize: 15,
-              display: 'flex',
-              alignItems: 'center',
-              position: 'relative',
-              pointerEvents: 'auto'
-            }}
-          >
-            <span style={{ flex: 1 }}>{popup.message}</span>
-            <button
-              onClick={() => closeErrorPopup(popup.id)}
-              style={{
-                position: 'absolute',
-                top: 8,
-                right: 12,
-                background: 'transparent',
-                border: 'none',
-                color: '#fff',
-                fontSize: 20,
-                fontWeight: 700,
-                cursor: 'pointer',
-                lineHeight: 1
-              }}
-              aria-label="Cerrar"
-            >
-              ×
-            </button>
-          </div>
-        ))}
-      </div>
       <form
         className={`solicitud-gasto-form ${theme}`}
         onSubmit={handleSubmit}

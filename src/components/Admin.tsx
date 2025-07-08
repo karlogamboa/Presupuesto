@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { fetchResultados, editarEstatusSolicitud } from '../services';
 import MenuUsuario from './MenuUsuario';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 interface Solicitud {
   id?: string;
@@ -131,7 +133,7 @@ const Admin: React.FC = () => {
     editarEstatusSolicitud(nuevoEstatus, solicitud)
       .then(response => {
         if (!response || response.success !== true) {
-          alert(`Error en la petición: ${response?.error || response?.message || 'Error desconocido'}`);
+          toast.error(`Error en la petición: ${response?.error || response?.message || 'Error desconocido'}`);
           // No actualizar el estado si no fue exitoso
         } else {
           const actualizadas = solicitudes.map(s =>
@@ -142,13 +144,14 @@ const Admin: React.FC = () => {
       })
       .catch(error => {
         const errorMessage = typeof error === 'object' && error !== null && 'message' in error ? error.message : error;
-        alert(`Error en la petición: ${errorMessage}`);
+        toast.error(`Error en la petición: ${errorMessage}`);
       });
   };
 
   return (
     <div style={{ maxWidth: 1100, margin: '2rem auto', padding: 24 }}>
       <MenuUsuario />
+      <ToastContainer position="top-center" autoClose={4000} />
       
       {(
         <>

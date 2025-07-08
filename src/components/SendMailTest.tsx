@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
 import { sendEmail } from '../services';
+import { toast } from 'react-toastify';
 
 const SendMailTest: React.FC = () => {
   const [to, setTo] = useState('');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
-  const [message, setMessage] = useState('');
 
   const handleSendMail = async () => {
     if (!to || !subject || !body) {
-      setMessage('Todos los campos son obligatorios.');
+      toast.error('Todos los campos son obligatorios.');
       return;
     }
 
@@ -18,13 +18,13 @@ const SendMailTest: React.FC = () => {
 
       if (!response || response?.error) {
         const errorMessage = response?.message || response?.error || 'Error desconocido';
-        setMessage(`Error al enviar correo: ${errorMessage}`);
+        toast.error(`Error al enviar correo: ${errorMessage}`);
       } else {
-        setMessage('Correo enviado exitosamente.');
+        toast.success('Correo enviado exitosamente.');
       }
     } catch (error) {
       const errorMessage = typeof error === 'object' && error !== null && 'message' in error ? error.message : error;
-      setMessage(`Error en la petición: ${errorMessage}`);
+      toast.error(`Error en la petición: ${errorMessage}`);
     }
   };
 
@@ -64,11 +64,6 @@ const SendMailTest: React.FC = () => {
       >
         Enviar Correo
       </button>
-      {message && (
-        <div style={{ marginTop: 16, padding: 12, backgroundColor: '#f4f6fb', borderRadius: 4, color: '#333' }}>
-          {message}
-        </div>
-      )}
     </div>
   );
 };

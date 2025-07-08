@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { fetchUserInfo, logout } from '../services';
+import { toast } from 'react-toastify';
 
 // Variable global para compartir info de usuario
 export let globalUserInfo: { email?: string; name?: string; role?: string | string[]; numeroEmpleado?: string } | null = null;
@@ -65,8 +66,7 @@ const MenuUsuario: React.FC = () => {
         setGlobalUserInfo(userObj);
       })
       .catch(() => {
-        setUser(null);
-        setGlobalUserInfo(null);
+        toast.error('Error al obtener información del usuario');
       });
   }, []);
 
