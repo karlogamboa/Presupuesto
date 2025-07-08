@@ -17,17 +17,21 @@ function getAuthHeaders(): HeadersInit {
 export async function loginWithApiGateway(credentials: { username: string; password: string }) {
   // En modo desarrollo, simular login exitoso
   if (config.DEVELOPMENT_MODE && !config.AUTH_ENABLED) {
-    // Simular token falso para desarrollo
-    const fakeToken = btoa(JSON.stringify({
-      ...config.DEFAULT_DEV_USER,
-      exp: Math.floor(Date.now() / 1000) + (24 * 60 * 60) // Expira en 24 horas
-    }));
-    
+    // Simular token falso con formato JWT para desarrollo
+    const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+    const payload = btoa(
+      JSON.stringify({
+        ...config.DEFAULT_DEV_USER,
+        exp: Math.floor(Date.now() / 1000) + 24 * 60 * 60 // Expira en 24 horas
+      })
+    );
+    const fakeToken = `${header}.${payload}.devsignature`;
+
     localStorage.setItem('access_token', fakeToken);
     localStorage.setItem('api_gateway_token', fakeToken);
-    
-    return { 
-      token: fakeToken, 
+
+    return {
+      token: fakeToken,
       user: config.DEFAULT_DEV_USER,
       message: 'Login en modo desarrollo'
     };
