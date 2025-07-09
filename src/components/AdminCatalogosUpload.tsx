@@ -6,8 +6,7 @@ const CATALOG_OPTIONS = [
   { value: 'proveedores', label: 'Proveedores' },
   { value: 'departamentos', label: 'Departamentos' },
   { value: 'categorias-gasto', label: 'Categorías de Gasto' },
-  { value: 'solicitantes', label: 'Solicitantes' },
-  { value: 'usuarios', label: 'Usuarios' },
+  { value: 'solicitantes', label: 'Solicitantes' }
 ];
 
 const AdminCatalogosUpload: React.FC = () => {
@@ -17,6 +16,7 @@ const AdminCatalogosUpload: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ type: string; message: string; data?: any } | null>(null);
 
+  // Mostrar resultado aunque sea error, no limpiar result automáticamente
   useEffect(() => {
     if (result) {
       if (result.type === 'success') {
@@ -26,7 +26,7 @@ const AdminCatalogosUpload: React.FC = () => {
       } else {
         toast.info(result.message);
       }
-      setResult(null); // Clear result after showing toast
+      // No limpiar result aquí, para que se muestre en la UI
     }
   }, [result]);
 
@@ -135,6 +135,42 @@ const AdminCatalogosUpload: React.FC = () => {
           {loading ? 'Importando...' : 'Importar'}
         </button>
       </form>
+      {result && result.data && (
+        <div style={{
+          margin: '32px auto',
+          maxWidth: 600,
+          background: '#f7fafd',
+          border: '1px solid #cfd8dc',
+          borderRadius: 8,
+          padding: 24,
+          color: result.type === 'success' ? '#388e3c' : '#d32f2f',
+          fontSize: 15,
+          wordBreak: 'break-word',
+          boxShadow: '0 2px 8px #0001'
+        }}>
+          <h4 style={{ marginTop: 0, color: result.type === 'success' ? '#388e3c' : '#d32f2f' }}>
+            {result.type === 'success' ? 'Resultado de la importación' : 'Detalle del error'}
+          </h4>
+          <div>
+            <strong>Mensaje:</strong> {result.data.message || result.message}
+          </div>
+          {result.data.errors && Array.isArray(result.data.errors) && result.data.errors.length > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <strong>Errores:</strong>
+              <ul style={{ color: '#d32f2f', marginTop: 6 }}>
+                {result.data.errors.map((err: string, idx: number) => (
+                  <li key={idx} style={{ fontSize: 14 }}>{err}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <div style={{ marginTop: 12 }}>
+            <strong>Registros totales:</strong> {result.data.totalRecords ?? '-'}<br />
+            <strong>Éxitos:</strong> {result.data.successCount ?? '-'}<br />
+            <strong>Errores:</strong> {result.data.errorCount ?? '-'}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

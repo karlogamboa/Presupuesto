@@ -3,12 +3,12 @@ import {
   fetchDepartamentos,
   fetchCategoriasGasto,
   fetchProveedores,
-  fetchSolicitanteByNumeroEmpleado,
-  guardarPresupuesto,
-  fetchResultados // <-- Importa fetchResultados si lo usas aquí
+  guardarPresupuesto
 } from '../services';
 import { globalUserInfo } from './MenuUsuario';
 import { toast } from 'react-toastify';
+import ResultadosTabla from './ResultadosTabla';
+import { useSolicitanteData } from '../hooks/useSolicitanteData';
 
 interface Option {
   value: string;
@@ -117,72 +117,7 @@ function useProveedores(setProveedores: (opts: Option[]) => void) {
   }, [setProveedores]);
 }
 
-function getCentroCostosFromSubDepartamento(subDepartamento: string) {
-  let centroCostos = '';
-  if (subDepartamento?.trim()) {
-    const regex = /^([A-Z0-9]+)[\s\-_]+/;
-    const match = regex.exec(subDepartamento);
-    if (match && match[1] && match[1].trim()) {
-      centroCostos = match[1].trim();
-    } else {
-      const partes = subDepartamento.split(/[\s\-_]+/);
-      if (partes.length > 0 && partes[0] && partes[0].trim()) {
-        centroCostos = partes[0].trim();
-      }
-    }
-  }
-  return centroCostos;
-}
-
-function parseEmpleadoData(data: any) {
-  // Extraer nombre del solicitante
-  const nombre = data?.nombre ?? '';
-  // Extraer correo electrónico
-  const correo = data?.['Correo electrónico'] ?? data?.correo ?? '';
-  // Procesar departamento y subdepartamento
-  let departamento = '';
-  let subDepartamento = '';
-  let centroCostosCalculado = '';
-  const deptStr = data?.departamento ?? '';
-  if (deptStr) {
-    const deptParts = deptStr.split(' : ');
-    if (deptParts.length > 1) {
-      departamento = deptParts[0].trim();
-      const subPartsInput = deptParts[1].trim();
-      const match = subPartsInput.match(/^(\d+)-(.+)$/);
-      if (match) {
-        centroCostosCalculado = match[1].trim();
-        subDepartamento = match[2].trim();
-      } else {
-        const subParts = subPartsInput.split('-');
-        if (subParts.length > 1) {
-          centroCostosCalculado = subParts[0].trim();
-          subDepartamento = subParts.slice(1).join('-').trim();
-        } else {
-          subDepartamento = subPartsInput;
-        }
-      }
-    } else {
-      departamento = deptStr;
-    }
-  }
-  if (!centroCostosCalculado && subDepartamento) {
-    centroCostosCalculado = getCentroCostosFromSubDepartamento(subDepartamento);
-  }
-  if (!centroCostosCalculado) {
-    centroCostosCalculado = data?.centroCostos || data?.['Centro de costos'] || '';
-  }
-  return {
-    nombre,
-    correo,
-    departamento,
-    subDepartamento,
-    centroCostos: centroCostosCalculado,
-    empresa: data?.subsidiaria ?? data?.empresa ?? ''
-  };
-}
-
-const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumeroEmpleadoChange?: (numeroEmpleado: string) => void }> = ({ onSubmit, onNumeroEmpleadoChange }) => {
+const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void }> = ({ onSubmit }) => {
   const [form, setForm] = useState<FormData>(initialForm);
   const [departamentos, setDepartamentos] = useState<Option[]>([]);
   const [subDepartamentos, setSubDepartamentos] = useState<Option[]>([]);
@@ -196,138 +131,110 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
   const [categoriasFiltradas, setCategoriasFiltradas] = useState<Option[]>([]);
   const [selectedProvider, setSelectedProvider] = useState<Option | null>(null);
   const [numeroEmpleadoCargado, setNumeroEmpleadoCargado] = useState<string>('');
-  const [numEmpleadoTimeout, setNumEmpleadoTimeout] = useState<NodeJS.Timeout | null>(null);
   const periodos = usePeriodos();
   const [periodoPresupuesto, setPeriodoPresupuesto] = useState<string>('');
+  const [loading, setLoading] = useState(true);
 
-  // useEffect principal para cargar el número de empleado al montar el componente
+  // Nuevo: usar el hook para obtener y parsear datos del solicitante
+  const { empleado: solicitanteParsed } = useSolicitanteData(form.numeroEmpleado || globalUserInfo?.numeroEmpleado);
+
+  // Sincronizar el form con los datos parseados del solicitante
   useEffect(() => {
-    // 1. Intenta obtener el número de empleado de la variable global
-    let numeroEmpleado: string | undefined = globalUserInfo?.numeroEmpleado;
-    // Nuevo: Intenta obtener el correo del usuario logueado
-    let correoUsuario: string | undefined = globalUserInfo?.email;
+    if (solicitanteParsed) {
+      setForm(prevForm => ({
+        ...prevForm,
+        solicitante: solicitanteParsed.nombre,
+        correo: solicitanteParsed.correo,
+        departamento: solicitanteParsed.departamento,
+        subDepartamento: solicitanteParsed.subDepartamento,
+        centroCostos: solicitanteParsed.centroCostos
+      }));
+      setEmpresa(solicitanteParsed.empresa);
+    } else if (form.numeroEmpleado) {
+      setForm(f => ({
+        ...f,
+        solicitante: '',
+        correo: '',
+        departamento: '',
+        subDepartamento: '',
+        centroCostos: ''
+      }));
+      setEmpresa('');
+    }
+  }, [solicitanteParsed]);
 
-    // 2. Si no está en la variable global, intenta obtenerlo del access_token (API Gateway token)
-    if (!numeroEmpleado || !correoUsuario) {
+  // Obtener el número de empleado solo una vez desde globalUserInfo
+  useEffect(() => {
+    let isMounted = true;
+    setLoading(true);
+    let numeroEmpleado: string | undefined = globalUserInfo?.numeroEmpleado;
+    if (!numeroEmpleado) {
       const accessToken = localStorage.getItem('access_token');
       if (accessToken) {
         try {
           const payload = JSON.parse(atob(accessToken.split('.')[1]));
           if (!numeroEmpleado)
             numeroEmpleado = payload.numeroEmpleado || payload.numero_empleado || payload.numEmpleado;
-          if (!correoUsuario)
-            correoUsuario = payload.email || payload.correo || payload['Correo electrónico'];
         } catch {
           // No-op
         }
       }
     }
-
-    // 3. Si lo encuentra, setea el número de empleado y carga los datos relacionados
-    if (numeroEmpleado && numeroEmpleado !== '') {
-      setForm(f => ({
-        ...f,
-        numeroEmpleado,
-        correo: correoUsuario || f.correo // Asigna el correo si está disponible
-      }));
-      setNumeroEmpleadoCargado(numeroEmpleado);
-
-      fetchResultados(numeroEmpleado).then(() => {});
-      fetchSolicitanteByNumeroEmpleado(numeroEmpleado)
-        .then((data: any) => {
-          if (!data || !data.nombre) {
-            setForm(f => ({
-              ...f,
-              solicitante: '',
-              correo: correoUsuario || '',
-              departamento: '',
-              subDepartamento: '',
-              centroCostos: ''
-            }));
-            return;
-          }
-          const parsed = parseEmpleadoData(data);
-          setForm(prevForm => ({
-            ...prevForm,
-            solicitante: parsed.nombre,
-            correo: correoUsuario || parsed.correo, // Prioriza el correo del usuario logueado
-            departamento: parsed.departamento,
-            subDepartamento: parsed.subDepartamento,
-            centroCostos: parsed.centroCostos
-          }));
-          setEmpresa(parsed.empresa);
-          if (onNumeroEmpleadoChange) {
-            onNumeroEmpleadoChange(numeroEmpleado!);
-          }
-        })
-        .catch(() => {
+    // Llama a todos los catálogos y datos iniciales en paralelo
+    Promise.all([
+      fetchDepartamentos().then((data: any[]) => {
+        if (!isMounted) return;
+        setDepartamentosData(data || []);
+        setDepartamentos(
+          (data || []).map((dep: any) => ({
+            value: dep.value || dep.departamento || '',
+            label: dep.label || dep.departamento || ''
+          }))
+        );
+      }),
+      fetchCategoriasGasto().then((data: any[]) => {
+        if (!isMounted) return;
+        const categoriasData = (data || []).map((d: any) => ({
+          value: String(d.cuenta || d.Cuenta || ''),
+          label: d.label || '',
+        }));
+        setCategorias(categoriasData);
+        setCategoriasFiltradas(
+          categoriasData.filter((categoria: Option, index: number, self: Option[]) =>
+            index === self.findIndex((c: Option) => c.label === categoria.label)
+          )
+        );
+      }),
+      fetchProveedores().then((data: any[]) => {
+        if (!isMounted) return;
+        const lista = (data || []).map((d: any) => {
+          return {
+            value: String(d.nombre || d.id || '').trim(),
+            label: String(d.nombre || '').trim(),
+            numeroEmpleado: d.numeroProveedor || d['Número Proveedor'] || '',
+            cuentaGastos: d.cuentaGastos || '',
+            categoriaGasto: d.categoria || d.Categoría || '',
+          };
+        });
+        setProveedores(lista);
+      }),
+      (async () => {
+        if (numeroEmpleado && numeroEmpleado !== '' && numeroEmpleado !== numeroEmpleadoCargado) {
           setForm(f => ({
             ...f,
-            solicitante: '',
-            correo: correoUsuario || '',
-            departamento: '',
-            subDepartamento: '',
-            centroCostos: ''
+            numeroEmpleado
           }));
-        });
-    }
+          setNumeroEmpleadoCargado(numeroEmpleado);
+        }
+      })()
+    ]).finally(() => {
+      if (isMounted) setLoading(false);
+    });
 
-    // Escucha cambios globales para actualizar el número de empleado si cambia en otro componente
-    function handleGlobalUserInfoUpdate() {
-      const nuevoNumeroEmpleado = globalUserInfo?.numeroEmpleado;
-      if (nuevoNumeroEmpleado && nuevoNumeroEmpleado !== numeroEmpleadoCargado) {
-        setForm(f => ({
-          ...f,
-          numeroEmpleado: nuevoNumeroEmpleado
-        }));
-        setNumeroEmpleadoCargado(nuevoNumeroEmpleado);
-
-        fetchResultados(nuevoNumeroEmpleado).then(() => {});
-        fetchSolicitanteByNumeroEmpleado(nuevoNumeroEmpleado)
-          .then((data: any) => {
-            if (!data || !data.nombre) {
-              setForm(f => ({
-                ...f,
-                solicitante: '',
-                correo: '',
-                departamento: '',
-                subDepartamento: '',
-                centroCostos: ''
-              }));
-              return;
-            }
-            const parsed = parseEmpleadoData(data);
-            setForm(prevForm => ({
-              ...prevForm,
-              solicitante: parsed.nombre,
-              correo: parsed.correo,
-              departamento: parsed.departamento,
-              subDepartamento: parsed.subDepartamento,
-              centroCostos: parsed.centroCostos
-            }));
-            setEmpresa(parsed.empresa);
-            if (onNumeroEmpleadoChange) {
-              onNumeroEmpleadoChange(nuevoNumeroEmpleado!);
-            }
-          })
-          .catch(() => {
-            setForm(f => ({
-              ...f,
-              solicitante: '',
-              correo: '',
-              departamento: '',
-              subDepartamento: '',
-              centroCostos: ''
-            }));
-          });
-      }
-    }
-    window.addEventListener('globalUserInfoUpdated', handleGlobalUserInfoUpdate);
     return () => {
-      window.removeEventListener('globalUserInfoUpdated', handleGlobalUserInfoUpdate);
+      isMounted = false;
     };
-  // Asegura que se ejecute también cuando cambia globalUserInfo
-  }, [onNumeroEmpleadoChange, globalUserInfo?.numeroEmpleado]);
+  }, [numeroEmpleadoCargado]);
 
   useDepartamentos(setDepartamentosData, setDepartamentos);
   useCategorias(setCategorias, setCategoriasFiltradas);
@@ -430,75 +337,6 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
     }
   }, [selectedProvider, categorias]);
 
-  const handleNumeroEmpleadoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Solo permite cambios si el campo no es readonly (es decir, si no se cargó automáticamente)
-    if (numeroEmpleadoCargado) return;
-    const value = e.target.value;
-    setForm(f => ({
-      ...f,
-      numeroEmpleado: value,
-      solicitante: '',
-      correo: '',
-      departamento: '',
-      subDepartamento: '',
-      centroCostos: ''
-    }));
-    if (numEmpleadoTimeout) {
-      clearTimeout(numEmpleadoTimeout);
-      setNumEmpleadoTimeout(null);
-    }
-    const timeout = setTimeout(() => {
-      if (value.trim()) {
-        fetchSolicitanteByNumeroEmpleado(value.trim())
-          .then((data: any) => {
-            if (!data || !data.nombre) {
-              setForm(f => ({
-                ...f,
-                solicitante: '',
-                correo: '',
-                departamento: '',
-                subDepartamento: '',
-                centroCostos: ''
-              }));
-            }
-            const parsed = parseEmpleadoData(data);
-            setForm(prevForm => ({
-              ...prevForm,
-              solicitante: parsed.nombre,
-              correo: parsed.correo,
-              departamento: parsed.departamento,
-              subDepartamento: parsed.subDepartamento,
-              centroCostos: parsed.centroCostos
-            }));
-            setEmpresa(parsed.empresa);
-            if (onNumeroEmpleadoChange) {
-              onNumeroEmpleadoChange(value);
-            }
-          })
-          .catch(() => {
-            setForm(f => ({
-              ...f,
-              solicitante: '',
-              correo: '',
-              departamento: '',
-              subDepartamento: '',
-              centroCostos: ''
-            }));
-          });
-      } else {
-        setForm(f => ({
-          ...f,
-          solicitante: '',
-          correo: '',
-          departamento: '',
-          subDepartamento: '',
-          centroCostos: ''
-        }));
-      }
-    }, 1000);
-    setNumEmpleadoTimeout(timeout);
-  };
-
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     if (name === 'proveedor') {
@@ -513,13 +351,10 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
         setForm(f => ({ ...f, proveedor: '' }));
       }
       setForm(f => ({ ...f, categoriaGasto: '', cuentaGastos: '' }));
-    } else if (name === 'numeroEmpleado') {
-      handleNumeroEmpleadoChange(e as React.ChangeEvent<HTMLInputElement>);
     } else if (name === 'subDepartamento') {
       setForm(f => ({
         ...f,
-        subDepartamento: value,
-        centroCostos: getCentroCostosFromSubDepartamento(value)
+        subDepartamento: value
       }));
     } else if (name === 'categoriaGasto') {
       const categoriaSeleccionada = categoriasFiltradas.find(c => c.value === value);
@@ -614,510 +449,522 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
 
   return (
     <>
-      <form
-        className={`solicitud-gasto-form ${theme}`}
-        onSubmit={handleSubmit}
-        style={{
-          maxWidth: 700,
-          margin: '2rem auto',
-          padding: 32,
-          borderRadius: 16,
-          background: theme === 'dark' ? '#232323' : '#fff',
-          boxShadow: '0 4px 24px #0002',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 24,
-          color: theme === 'dark' ? '#f3f3f3' : '#111'
-        }}
-      >
-        <h2 style={{
-          textAlign: 'center',
-          marginBottom: 0,
-          letterSpacing: 1,
-          color: theme === 'dark' ? '#90caf9' : '#1976d2'
-        }}>
-          Solicitud de Presupuesto
-        </h2>
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr 1fr',
-            gap: 24,
-            alignItems: 'center'
-          }}
-        >
-          <div className="form-group" style={{ gridColumn: '1 / 2' }}>
-            <label
-              htmlFor="numeroEmpleado"
-              style={{
-                fontWeight: 500,
-                marginBottom: 6,
-                display: 'block',
-                textAlign: 'left',
-                color: theme === 'dark' ? '#f3f3f3' : '#111'
-              }}
-            >Número de Empleado:</label>
-            <input
-              id="numeroEmpleado"
-              name="numeroEmpleado"
-              value={form.numeroEmpleado}
-              onChange={handleNumeroEmpleadoChange}
-              required
-              readOnly={!!numeroEmpleadoCargado}
-              style={{
-                width: '100%',
-                padding: 8,
-                borderRadius: 6,
-                border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc',
-                background: theme === 'dark' ? '#333' : '#fff',
-                color: theme === 'dark' ? '#f3f3f3' : '#111'
-              }}
-              className={theme === 'dark' ? 'input-dark-placeholder' : 'input-light-placeholder'}
-            />
-          </div>
-          <div className="form-group" style={{ gridColumn: '2 / 3' }}>
-            <label style={{
-              fontWeight: 500,
-              marginBottom: 6,
-              display: 'block',
-              textAlign: 'left',
-              color: theme === 'dark' ? '#f3f3f3' : '#111'
-            }}>Nombre del Solicitante:</label>
-            <input
-              name="solicitante"
-              value={form.solicitante}
-              readOnly
-              style={{
-                width: '100%',
-                padding: 8,
-                borderRadius: 6,
-                border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc',
-                background: theme === 'dark' ? '#333' : '#f7fafd',
-                color: theme === 'dark' ? '#f3f3f3' : '#111'
-              }}
-            />
-          </div>
-          <div className="form-group" style={{ gridColumn: '3 / 4' }}>
-            <label style={{
-              fontWeight: 500,
-              marginBottom: 6,
-              display: 'block',
-              textAlign: 'left',
-              color: theme === 'dark' ? '#f3f3f3' : '#111'
-            }}>Correo:</label>
-            <input
-              name="correo"
-              value={form.correo}
-              readOnly
-              style={{
-                width: '100%',
-                padding: 8,
-                borderRadius: 6,
-                border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc',
-                background: theme === 'dark' ? '#333' : '#f7fafd',
-                color: theme === 'dark' ? '#f3f3f3' : '#111'
-              }}
-            />
-          </div>
-          <div className="form-group" style={{ gridColumn: '1 / 2' }}>
-            <label
-              htmlFor="departamento"
-              style={{
-                fontWeight: 500,
-                marginBottom: 6,
-                display: 'block',
-                textAlign: 'left',
-                color: theme === 'dark' ? '#f3f3f3' : '#111'
-              }}>Departamento:</label>
-            <select
-              id="departamento"
-              name="departamento"
-              value={form.departamento}
-              onChange={handleChange}
-              required
-              style={{
-                width: '100%',
-                padding: 8,
-                borderRadius: 6,
-                border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc',
-                color: theme === 'dark' ? '#f3f3f3' : '#111',
-                background: theme === 'dark' ? '#333' : '#fff'
-              }}
-              className={theme === 'dark' ? 'select-dark-placeholder' : 'select-light-placeholder'}
-            >
-              <option value="">Seleccione</option>
-              {departamentos.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-          </div>
-          <div className="form-group" style={{ gridColumn: '2 / 3' }}>
-            <label
-              htmlFor="subDepartamento"
-              style={{
-                fontWeight: 500,
-                marginBottom: 6,
-                display: 'block',
-                textAlign: 'left',
-                color: theme === 'dark' ? '#f3f3f3' : '#111'
-              }}>Sub-Departamento:</label>
-            <select
-              id="subDepartamento"
-              name="subDepartamento"
-              value={form.subDepartamento}
-              onChange={handleChange}
-              required
-              style={{
-                width: '100%',
-                padding: 8,
-                borderRadius: 6,
-                border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc',
-                color: theme === 'dark' ? '#f3f3f3' : '#111',
-                background: theme === 'dark' ? '#333' : '#fff'
-              }}
-              className={theme === 'dark' ? 'select-dark-placeholder' : 'select-light-placeholder'}
-            >
-              <option value="">Seleccione</option>
-              {subDepartamentos.map((opt, idx) => (
-                <option key={opt.value + '-' + idx} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-          </div>
-          <div className="form-group" style={{ gridColumn: '3 / 4' }}>
-            <label style={{
-              fontWeight: 500,
-              marginBottom: 6,
-              display: 'block',
-              textAlign: 'left',
-              color: theme === 'dark' ? '#f3f3f3' : '#111'
-            }}>Centro de Costos:</label>
-            <input
-              name="centroCostos"
-              value={form.centroCostos}
-              readOnly
-              style={{
-                width: '100%',
-                padding: 8,
-                borderRadius: 6,
-                border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc',
-                background: theme === 'dark' ? '#333' : '#f7fafd',
-                color: theme === 'dark' ? '#f3f3f3' : '#111'
-              }}
-            />
-          </div>
-          <div className="form-group" style={{ gridColumn: '1 / 2' }}>
-            <label style={{
-              fontWeight: 500,
-              marginBottom: 6,
-              display: 'block',
-              textAlign: 'left',
-              color: theme === 'dark' ? '#f3f3f3' : '#111'
-            }}>Periodo de Solicitud:</label>
-            <select
-              name="periodoPresupuesto"
-              value={periodoPresupuesto}
-              onChange={e => {
-                setPeriodoPresupuesto(e.target.value);
-                setForm(f => ({ ...f, periodoPresupuesto: e.target.value }));
-              }}
-              required
-              style={{
-                width: '100%',
-                padding: 8,
-                borderRadius: 6,
-                border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc',
-                color: theme === 'dark' ? '#f3f3f3' : '#111',
-                background: theme === 'dark' ? '#333' : '#fff'
-              }}
-              className={theme === 'dark' ? 'select-dark-placeholder' : 'select-light-placeholder'}
-            >
-              <option value="">Seleccione</option>
-              {periodos.map((periodo, idx) => (
-                <option key={periodo + '-' + idx} value={periodo}>{periodo}</option>
-              ))}
-            </select>
-          </div>
-          <div className="form-group" style={{ gridColumn: '2 / 4', position: 'relative', zIndex: 20 }}>
-            <label style={{
-              fontWeight: 500,
-              marginBottom: 6,
-              display: 'block',
-              textAlign: 'left',
-              color: theme === 'dark' ? '#f3f3f3' : '#111'
-            }}>Proveedores:</label>
-            <input
-              type="text"
-              name="proveedorInput"
-              value={proveedorInput}
-              onChange={handleProveedorInput}
-              placeholder="Escriba para buscar proveedor..."
-              autoComplete="off"
-              style={{
-                width: '100%',
-                padding: 8,
-                borderRadius: 6,
-                border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc',
-                color: theme === 'dark' ? '#f3f3f3' : '#111',
-                background: theme === 'dark' ? '#333' : '#fff'
-              }}
-              className={theme === 'dark' ? 'input-dark-placeholder' : 'input-light-placeholder'}
-            />
-            <div style={{
-              marginTop: 8,
+      {loading ? (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: 80 }}>
+          <div className="spinner" style={{ width: 48, height: 48, border: '6px solid #eee', borderTop: '6px solid #1976d2', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+          <span style={{ marginTop: 24, fontSize: 18, color: '#1976d2', fontWeight: 500 }}>Cargando catálogos y datos iniciales...</span>
+          <style>{`@keyframes spin { 0% { transform: rotate(0deg);} 100% { transform: rotate(360deg);} }`}</style>
+        </div>
+      ) : (
+        <>
+          <form
+            className={`solicitud-gasto-form ${theme}`}
+            onSubmit={handleSubmit}
+            style={{
+              maxWidth: 700,
+              margin: '2rem auto',
+              padding: 32,
+              borderRadius: 16,
+              background: theme === 'dark' ? '#232323' : '#fff',
+              boxShadow: '0 4px 24px #0002',
               display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between'
+              flexDirection: 'column',
+              gap: 24,
+              color: theme === 'dark' ? '#f3f3f3' : '#111'
+            }}
+          >
+            <h2 style={{
+              textAlign: 'center',
+              marginBottom: 0,
+              letterSpacing: 1,
+              color: theme === 'dark' ? '#90caf9' : '#1976d2'
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <label style={{
-                  fontSize: '0.85em',
-                  color: theme === 'dark' ? '#f3f3f3' : '#111'
-                }}>Categoría:</label>
-                <span style={{
-                  fontSize: '0.85em',
-                  color: theme === 'dark' ? '#f3f3f3' : '#111'
-                }}>{selectedProvider?.categoriaGasto || ''}</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <input
-                  type="checkbox"
-                  id="sinProveedor"
-                  checked={!selectedProvider}
-                  onChange={() => {
-                    setSelectedProvider(null);
-                    setProveedor('');
-                    setProveedorInput('');
-                    setForm(f => ({ ...f, proveedor: '' }));
-                    setCategoriasFiltradas(categorias); // Quitar el filtro de cuentas de gasto
+              Solicitud de Presupuesto
+            </h2>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr 1fr',
+                gap: 24,
+                alignItems: 'center'
+              }}
+            >
+              <div className="form-group" style={{ gridColumn: '1 / 2' }}>
+                <label
+                  htmlFor="numeroEmpleado"
+                  style={{
+                    fontWeight: 500,
+                    marginBottom: 6,
+                    display: 'block',
+                    textAlign: 'left',
+                    color: theme === 'dark' ? '#f3f3f3' : '#111'
                   }}
+                >Número de Empleado:</label>
+                <input
+                  id="numeroEmpleado"
+                  name="numeroEmpleado"
+                  value={form.numeroEmpleado}
+                  required
+                  readOnly
+                  style={{
+                    width: '100%',
+                    padding: 8,
+                    borderRadius: 6,
+                    border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc',
+                    background: theme === 'dark' ? '#333' : '#fff',
+                    color: theme === 'dark' ? '#f3f3f3' : '#111'
+                  }}
+                  className={theme === 'dark' ? 'input-dark-placeholder' : 'input-light-placeholder'}
                 />
-                <label htmlFor="sinProveedor" style={{
-                  fontSize: '0.85em',
-                  color: theme === 'dark' ? '#f3f3f3' : '#111'
-                }}>Sin Proveedor</label>
               </div>
-            </div>
-            {proveedorInput && proveedoresFiltrados.length > 0 && !proveedor && (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: 60,
-                  left: 0,
-                  right: 0,
-                  zIndex: 2000, // Aumenta el z-index
-                  background: theme === 'dark' ? '#232323' : '#fff', // Ajusta fondo según tema
-                  border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc', // Ajusta borde según tema
-                  borderRadius: 8,
-                  maxHeight: 260,
-                  overflowY: 'auto',
-                  boxShadow: '0 4px 16px #0002',
-                  color: theme === 'dark' ? '#f3f3f3' : '#111' // Ajusta color de texto según tema
-                }}
-              >
-                {proveedoresFiltrados.map((prov, idx) => {
-                  // Extract ternary operations into variables
-                  const isLast = idx < proveedoresFiltrados.length - 1;
-                  const borderBottom = isLast
-                    ? (theme === 'dark' ? '1px solid #333' : '1px solid #f0f0f0')
-                    : 'none';
-                  const isSelected = prov.value === proveedor;
-                  let background = '';
-                  if (isSelected) {
-                    background = theme === 'dark' ? '#2a3b5c' : '#e3eafc';
-                  } else {
-                    background = theme === 'dark' ? '#232323' : '#fff';
-                  }
-                  return (
-                    <button
-                      key={prov.value + '-' + idx}
-                      type="button"
-                      onClick={() => {
-                        setSelectedProvider(prov);
-                        setProveedor(prov.value); 
-                        setProveedorInput(prov.label);
-                        setForm(f => ({ ...f, proveedor: prov.label }));
-                        // Aplicar el mismo filtrado que el useEffect
-                        if (prov.cuentaGastos && prov.cuentaGastos.trim() !== '') {
-                          const cuentasProveedor = prov.cuentaGastos.split(',').map((cuenta: string) => cuenta.trim());
-                          const nuevasCategoriasFiltradas = categorias.filter(categoria => {
-                            return cuentasProveedor.some(cuentaProveedor => {
-                              const categoriaLabelNormalizado = normalizeText(categoria.label);
-                              const cuentaProveedorNormalizada = normalizeText(cuentaProveedor);
-                              return categoriaLabelNormalizado === cuentaProveedorNormalizada;
-                            });
-                          });
-                          setCategoriasFiltradas(nuevasCategoriasFiltradas);
-                        } else {
-                          setCategoriasFiltradas(categorias);
-                        }
-                      }}
-                      style={{
-                        padding: 12,
-                        cursor: 'pointer',
-                        border: 'none',
-                        borderBottom,
-                        background,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 2,
-                        color: theme === 'dark' ? '#f3f3f3' : '#111',
-                        textAlign: 'left',
-                        width: '100%',
-                        outline: isSelected ? '2px solid #1976d2' : undefined,
-                      }}
-                      tabIndex={0}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          setSelectedProvider(prov);
-                          setProveedor(prov.value); 
-                          setProveedorInput(prov.label);
-                          setForm(f => ({ ...f, proveedor: prov.label }));
-                          // Aplicar el mismo filtrado que el useEffect
-                          if (prov.cuentaGastos && prov.cuentaGastos.trim() !== '') {
-                            const cuentasProveedor = prov.cuentaGastos.split(',').map((cuenta: string) => cuenta.trim());
-                            const nuevasCategoriasFiltradas = categorias.filter(categoria => {
-                              return cuentasProveedor.some(cuentaProveedor => {
-                                const categoriaLabelNormalizado = normalizeText(categoria.label);
-                                const cuentaProveedorNormalizada = normalizeText(cuentaProveedor);
-                                return categoriaLabelNormalizado === cuentaProveedorNormalizada;
-                              });
-                            });
-                            setCategoriasFiltradas(nuevasCategoriasFiltradas);
-                          } else {
-                            setCategoriasFiltradas(categorias);
-                          }
-                        }
-                      }}
-                      aria-pressed={isSelected}
-                    >
-                      <span style={{ fontWeight: 600, color: theme === 'dark' ? '#90caf9' : '#1976d2', fontSize: 16 }}>{prov.label}</span>
-                      {prov.numeroEmpleado && (
-                        <span style={{ color: theme === 'dark' ? '#bbb' : '#888', fontSize: 13 }}>Núm. Proveedor: {prov.numeroEmpleado}</span>
-                      )}
-                      {prov.categoriaGasto && (
-                        <span style={{ color: theme === 'dark' ? '#bbb' : '#888', fontSize: 13 }}>Categoría: {prov.categoriaGasto}</span>
-                      )}
-                      {prov.cuentaGastos && (
-                        <span style={{ color: theme === 'dark' ? '#bbb' : '#888', fontSize: 13 }}>Cuenta Gastos: {prov.cuentaGastos}</span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-          <div className="form-group" style={{ gridColumn: '1 / 3', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <div>
-              <label
-                htmlFor="categoriaGasto"
-                style={{
+              <div className="form-group" style={{ gridColumn: '2 / 3' }}>
+                <label style={{
                   fontWeight: 500,
                   marginBottom: 6,
                   display: 'block',
                   textAlign: 'left',
                   color: theme === 'dark' ? '#f3f3f3' : '#111'
-                }}>Cuenta de Gastos:</label>
-              <select
-                id="categoriaGasto"
-                name="categoriaGasto"
-                value={form.categoriaGasto}
-                onChange={handleChange}
-                required
-                style={{
-                  width: '100%',
-                  padding: 8,
-                  borderRadius: 6,
-                  border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc',
-                  color: theme === 'dark' ? '#f3f3f3' : '#111',
-                  background: theme === 'dark' ? '#333' : '#fff'
-                }}
-                className={theme === 'dark' ? 'select-dark-placeholder' : 'select-light-placeholder'}
-              >
-                <option value="">Seleccione</option>
-                {categoriasFiltradas.map((opt, idx) => (
-                  <option key={opt.value + '-' + idx} value={opt.value}>
-                    {opt.label} {/* Display only the label */}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label style={{
-                fontWeight: 500,
-                marginBottom: 6,
-                display: 'block',
-                textAlign: 'left',
-                color: theme === 'dark' ? '#f3f3f3' : '#111'
-              }}>Cuenta Seleccionada:</label>
-              <input
-                type="text"
-                value={form.categoriaGasto}
-                readOnly
-                style={{
-                  width: '100%',
-                  padding: 8,
-                  borderRadius: 6,
-                  border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc',
-                  background: theme === 'dark' ? '#333' : '#f7fafd',
+                }}>Nombre del Solicitante:</label>
+                <input
+                  name="solicitante"
+                  value={form.solicitante}
+                  readOnly
+                  style={{
+                    width: '100%',
+                    padding: 8,
+                    borderRadius: 6,
+                    border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc',
+                    background: theme === 'dark' ? '#333' : '#f7fafd',
+                    color: theme === 'dark' ? '#f3f3f3' : '#111'
+                  }}
+                />
+              </div>
+              <div className="form-group" style={{ gridColumn: '3 / 4' }}>
+                <label style={{
+                  fontWeight: 500,
+                  marginBottom: 6,
+                  display: 'block',
+                  textAlign: 'left',
                   color: theme === 'dark' ? '#f3f3f3' : '#111'
-                }}
-              />
+                }}>Correo:</label>
+                <input
+                  name="correo"
+                  value={form.correo}
+                  readOnly
+                  style={{
+                    width: '100%',
+                    padding: 8,
+                    borderRadius: 6,
+                    border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc',
+                    background: theme === 'dark' ? '#333' : '#f7fafd',
+                    color: theme === 'dark' ? '#f3f3f3' : '#111'
+                  }}
+                />
+              </div>
+              <div className="form-group" style={{ gridColumn: '1 / 2' }}>
+                <label
+                  htmlFor="departamento"
+                  style={{
+                    fontWeight: 500,
+                    marginBottom: 6,
+                    display: 'block',
+                    textAlign: 'left',
+                    color: theme === 'dark' ? '#f3f3f3' : '#111'
+                  }}>Departamento:</label>
+                <select
+                  id="departamento"
+                  name="departamento"
+                  value={form.departamento}
+                  onChange={handleChange}
+                  required
+                  style={{
+                    width: '100%',
+                    padding: 8,
+                    borderRadius: 6,
+                    border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc',
+                    color: theme === 'dark' ? '#f3f3f3' : '#111',
+                    background: theme === 'dark' ? '#333' : '#fff'
+                  }}
+                  className={theme === 'dark' ? 'select-dark-placeholder' : 'select-light-placeholder'}
+                >
+                  <option value="">Seleccione</option>
+                  {departamentos.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group" style={{ gridColumn: '2 / 3' }}>
+                <label
+                  htmlFor="subDepartamento"
+                  style={{
+                    fontWeight: 500,
+                    marginBottom: 6,
+                    display: 'block',
+                    textAlign: 'left',
+                    color: theme === 'dark' ? '#f3f3f3' : '#111'
+                  }}>Sub-Departamento:</label>
+                <select
+                  id="subDepartamento"
+                  name="subDepartamento"
+                  value={form.subDepartamento}
+                  onChange={handleChange}
+                  required
+                  style={{
+                    width: '100%',
+                    padding: 8,
+                    borderRadius: 6,
+                    border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc',
+                    color: theme === 'dark' ? '#f3f3f3' : '#111',
+                    background: theme === 'dark' ? '#333' : '#fff'
+                  }}
+                  className={theme === 'dark' ? 'select-dark-placeholder' : 'select-light-placeholder'}
+                >
+                  <option value="">Seleccione</option>
+                  {subDepartamentos.map((opt, idx) => (
+                    <option key={opt.value + '-' + idx} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group" style={{ gridColumn: '3 / 4' }}>
+                <label style={{
+                  fontWeight: 500,
+                  marginBottom: 6,
+                  display: 'block',
+                  textAlign: 'left',
+                  color: theme === 'dark' ? '#f3f3f3' : '#111'
+                }}>Centro de Costos:</label>
+                <input
+                  name="centroCostos"
+                  value={form.centroCostos}
+                  readOnly
+                  style={{
+                    width: '100%',
+                    padding: 8,
+                    borderRadius: 6,
+                    border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc',
+                    background: theme === 'dark' ? '#333' : '#f7fafd',
+                    color: theme === 'dark' ? '#f3f3f3' : '#111'
+                  }}
+                />
+              </div>
+              <div className="form-group" style={{ gridColumn: '1 / 2' }}>
+                <label style={{
+                  fontWeight: 500,
+                  marginBottom: 6,
+                  display: 'block',
+                  textAlign: 'left',
+                  color: theme === 'dark' ? '#f3f3f3' : '#111'
+                }}>Periodo de Solicitud:</label>
+                <select
+                  name="periodoPresupuesto"
+                  value={periodoPresupuesto}
+                  onChange={e => {
+                    setPeriodoPresupuesto(e.target.value);
+                    setForm(f => ({ ...f, periodoPresupuesto: e.target.value }));
+                  }}
+                  required
+                  style={{
+                    width: '100%',
+                    padding: 8,
+                    borderRadius: 6,
+                    border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc',
+                    color: theme === 'dark' ? '#f3f3f3' : '#111',
+                    background: theme === 'dark' ? '#333' : '#fff'
+                  }}
+                  className={theme === 'dark' ? 'select-dark-placeholder' : 'select-light-placeholder'}
+                >
+                  <option value="">Seleccione</option>
+                  {periodos.map((periodo, idx) => (
+                    <option key={periodo + '-' + idx} value={periodo}>{periodo}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group" style={{ gridColumn: '2 / 4', position: 'relative', zIndex: 20 }}>
+                <label style={{
+                  fontWeight: 500,
+                  marginBottom: 6,
+                  display: 'block',
+                  textAlign: 'left',
+                  color: theme === 'dark' ? '#f3f3f3' : '#111'
+                }}>Proveedores:</label>
+                <input
+                  type="text"
+                  name="proveedorInput"
+                  value={proveedorInput}
+                  onChange={handleProveedorInput}
+                  placeholder="Escriba para buscar proveedor..."
+                  autoComplete="off"
+                  style={{
+                    width: '100%',
+                    padding: 8,
+                    borderRadius: 6,
+                    border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc',
+                    color: theme === 'dark' ? '#f3f3f3' : '#111',
+                    background: theme === 'dark' ? '#333' : '#fff'
+                  }}
+                  className={theme === 'dark' ? 'input-dark-placeholder' : 'input-light-placeholder'}
+                />
+                <div style={{
+                  marginTop: 8,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <label style={{
+                      fontSize: '0.85em',
+                      color: theme === 'dark' ? '#f3f3f3' : '#111'
+                    }}>Categoría:</label>
+                    <span style={{
+                      fontSize: '0.85em',
+                      color: theme === 'dark' ? '#f3f3f3' : '#111'
+                    }}>{selectedProvider?.categoriaGasto || ''}</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <input
+                      type="checkbox"
+                      id="sinProveedor"
+                      checked={!selectedProvider}
+                      onChange={() => {
+                        setSelectedProvider(null);
+                        setProveedor('');
+                        setProveedorInput('');
+                        setForm(f => ({ ...f, proveedor: '' }));
+                        setCategoriasFiltradas(categorias); // Quitar el filtro de cuentas de gasto
+                      }}
+                    />
+                    <label htmlFor="sinProveedor" style={{
+                      fontSize: '0.85em',
+                      color: theme === 'dark' ? '#f3f3f3' : '#111'
+                    }}>Sin Proveedor</label>
+                  </div>
+                </div>
+                {proveedorInput && proveedoresFiltrados.length > 0 && !proveedor && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: 60,
+                      left: 0,
+                      right: 0,
+                      zIndex: 2000, // Aumenta el z-index
+                      background: theme === 'dark' ? '#232323' : '#fff', // Ajusta fondo según tema
+                      border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc', // Ajusta borde según tema
+                      borderRadius: 8,
+                      maxHeight: 260,
+                      overflowY: 'auto',
+                      boxShadow: '0 4px 16px #0002',
+                      color: theme === 'dark' ? '#f3f3f3' : '#111' // Ajusta color de texto según tema
+                    }}
+                  >
+                    {proveedoresFiltrados.map((prov, idx) => {
+                      // Extract ternary operations into variables
+                      const isLast = idx < proveedoresFiltrados.length - 1;
+                      const borderBottom = isLast
+                        ? (theme === 'dark' ? '1px solid #333' : '1px solid #f0f0f0')
+                        : 'none';
+                      const isSelected = prov.value === proveedor;
+                      let background = '';
+                      if (isSelected) {
+                        background = theme === 'dark' ? '#2a3b5c' : '#e3eafc';
+                      } else {
+                        background = theme === 'dark' ? '#232323' : '#fff';
+                      }
+                      return (
+                        <button
+                          key={prov.value + '-' + idx}
+                          type="button"
+                          onClick={() => {
+                            setSelectedProvider(prov);
+                            setProveedor(prov.value); 
+                            setProveedorInput(prov.label);
+                            setForm(f => ({ ...f, proveedor: prov.label }));
+                            // Aplicar el mismo filtrado que el useEffect
+                            if (prov.cuentaGastos && prov.cuentaGastos.trim() !== '') {
+                              const cuentasProveedor = prov.cuentaGastos.split(',').map((cuenta: string) => cuenta.trim());
+                              const nuevasCategoriasFiltradas = categorias.filter(categoria => {
+                                return cuentasProveedor.some(cuentaProveedor => {
+                                  const categoriaLabelNormalizado = normalizeText(categoria.label);
+                                  const cuentaProveedorNormalizada = normalizeText(cuentaProveedor);
+                                  return categoriaLabelNormalizado === cuentaProveedorNormalizada;
+                                });
+                              });
+                              setCategoriasFiltradas(nuevasCategoriasFiltradas);
+                            } else {
+                              setCategoriasFiltradas(categorias);
+                            }
+                          }}
+                          style={{
+                            padding: 12,
+                            cursor: 'pointer',
+                            border: 'none',
+                            borderBottom,
+                            background,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 2,
+                            color: theme === 'dark' ? '#f3f3f3' : '#111',
+                            textAlign: 'left',
+                            width: '100%',
+                            outline: isSelected ? '2px solid #1976d2' : undefined,
+                          }}
+                          tabIndex={0}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              setSelectedProvider(prov);
+                              setProveedor(prov.value); 
+                              setProveedorInput(prov.label);
+                              setForm(f => ({ ...f, proveedor: prov.label }));
+                              // Aplicar el mismo filtrado que el useEffect
+                              if (prov.cuentaGastos && prov.cuentaGastos.trim() !== '') {
+                                const cuentasProveedor = prov.cuentaGastos.split(',').map((cuenta: string) => cuenta.trim());
+                                const nuevasCategoriasFiltradas = categorias.filter(categoria => {
+                                  return cuentasProveedor.some(cuentaProveedor => {
+                                    const categoriaLabelNormalizado = normalizeText(categoria.label);
+                                    const cuentaProveedorNormalizada = normalizeText(cuentaProveedor);
+                                    return categoriaLabelNormalizado === cuentaProveedorNormalizada;
+                                  });
+                                });
+                                setCategoriasFiltradas(nuevasCategoriasFiltradas);
+                              } else {
+                                setCategoriasFiltradas(categorias);
+                              }
+                            }
+                          }}
+                          aria-pressed={isSelected}
+                        >
+                          <span style={{ fontWeight: 600, color: theme === 'dark' ? '#90caf9' : '#1976d2', fontSize: 16 }}>{prov.label}</span>
+                          {prov.numeroEmpleado && (
+                            <span style={{ color: theme === 'dark' ? '#bbb' : '#888', fontSize: 13 }}>Núm. Proveedor: {prov.numeroEmpleado}</span>
+                          )}
+                          {prov.categoriaGasto && (
+                            <span style={{ color: theme === 'dark' ? '#bbb' : '#888', fontSize: 13 }}>Categoría: {prov.categoriaGasto}</span>
+                          )}
+                          {prov.cuentaGastos && (
+                            <span style={{ color: theme === 'dark' ? '#bbb' : '#888', fontSize: 13 }}>Cuenta Gastos: {prov.cuentaGastos}</span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              <div className="form-group" style={{ gridColumn: '1 / 3', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div>
+                  <label
+                    htmlFor="categoriaGasto"
+                    style={{
+                      fontWeight: 500,
+                      marginBottom: 6,
+                      display: 'block',
+                      textAlign: 'left',
+                      color: theme === 'dark' ? '#f3f3f3' : '#111'
+                    }}>Cuenta de Gastos:</label>
+                  <select
+                    id="categoriaGasto"
+                    name="categoriaGasto"
+                    value={form.categoriaGasto}
+                    onChange={handleChange}
+                    required
+                    style={{
+                      width: '100%',
+                      padding: 8,
+                      borderRadius: 6,
+                      border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc',
+                      color: theme === 'dark' ? '#f3f3f3' : '#111',
+                      background: theme === 'dark' ? '#333' : '#fff'
+                    }}
+                    className={theme === 'dark' ? 'select-dark-placeholder' : 'select-light-placeholder'}
+                  >
+                    <option value="">Seleccione</option>
+                    {categoriasFiltradas.map((opt, idx) => (
+                      <option key={opt.value + '-' + idx} value={opt.value}>
+                        {opt.label} {/* Display only the label */}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={{
+                    fontWeight: 500,
+                    marginBottom: 6,
+                    display: 'block',
+                    textAlign: 'left',
+                    color: theme === 'dark' ? '#f3f3f3' : '#111'
+                  }}>Cuenta Seleccionada:</label>
+                  <input
+                    type="text"
+                    value={form.categoriaGasto}
+                    readOnly
+                    style={{
+                      width: '100%',
+                      padding: 8,
+                      borderRadius: 6,
+                      border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc',
+                      background: theme === 'dark' ? '#333' : '#f7fafd',
+                      color: theme === 'dark' ? '#f3f3f3' : '#111'
+                    }}
+                  />
+                </div>
+              </div>
+              <div className="form-group" style={{ gridColumn: '3 / 4' }}>
+                <label
+                  htmlFor="montoSubtotal"
+                  style={{
+                    fontWeight: 500,
+                    marginBottom: 6,
+                    display: 'block',
+                    textAlign: 'left',
+                    color: theme === 'dark' ? '#f3f3f3' : '#111'
+                  }}>
+                  Monto Solicitado ( s/IVA)
+                </label>
+                <input
+                  id="montoSubtotal"
+                  name="montoSubtotal"
+                  type="number"
+                  value={form.montoSubtotal}
+                  onChange={handleChange}
+                  required
+                  min={0}
+                  step="0.01"
+                  style={{
+                    width: '100%',
+                    padding: 8,
+                    borderRadius: 6,
+                    border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc',
+                    background: theme === 'dark' ? '#333' : '#fff',
+                    color: theme === 'dark' ? '#f3f3f3' : '#111'
+                  }}
+                  className={theme === 'dark' ? 'input-dark-placeholder' : 'input-light-placeholder'}
+                />
+              </div>
             </div>
-          </div>
-          <div className="form-group" style={{ gridColumn: '3 / 4' }}>
-            <label
-              htmlFor="montoSubtotal"
+            <button
+              type="submit"
               style={{
-                fontWeight: 500,
-                marginBottom: 6,
-                display: 'block',
-                textAlign: 'left',
-                color: theme === 'dark' ? '#f3f3f3' : '#111'
-              }}>
-              Monto Solicitado ( s/IVA)
-            </label>
-            <input
-              id="montoSubtotal"
-              name="montoSubtotal"
-              type="number"
-              value={form.montoSubtotal}
-              onChange={handleChange}
-              required
-              min={0}
-              step="0.01"
-              style={{
-                width: '100%',
-                padding: 8,
-                borderRadius: 6,
-                border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc',
-                background: theme === 'dark' ? '#333' : '#fff',
-                color: theme === 'dark' ? '#f3f3f3' : '#111'
+                width: 220,
+                alignSelf: 'center',
+                padding: 14,
+                borderRadius: 8,
+                background: theme === 'dark' ? '#1976d2' : '#1976d2',
+                color: '#fff',
+                fontWeight: 600,
+                border: 'none',
+                fontSize: 18,
+                cursor: 'pointer',
+                letterSpacing: 1,
+                marginTop: 8
               }}
-              className={theme === 'dark' ? 'input-dark-placeholder' : 'input-light-placeholder'}
-            />
+            >
+              Solicitar
+            </button>
+          </form>
+          <div style={{ maxWidth: 900, margin: '2rem auto' }}>
+            <ResultadosTabla numeroEmpleado={form.numeroEmpleado} />
           </div>
-        </div>
-        <button
-          type="submit"
-          style={{
-            width: 220,
-            alignSelf: 'center',
-            padding: 14,
-            borderRadius: 8,
-            background: theme === 'dark' ? '#1976d2' : '#1976d2',
-            color: '#fff',
-            fontWeight: 600,
-            border: 'none',
-            fontSize: 18,
-            cursor: 'pointer',
-            letterSpacing: 1,
-            marginTop: 8
-          }}
-        >
-          Solicitar
-        </button>
-      </form>
+        </>
+      )}
     </>
   );
 };

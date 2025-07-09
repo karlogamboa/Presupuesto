@@ -11,9 +11,8 @@ export const config = {
   
   // Usuario por defecto para desarrollo
   DEFAULT_DEV_USER: {
-    email: 'dev@circulodecredito.com',
+    email: 'karlo@zicral.com',
     name: 'Usuario Desarrollo',
-    roles: ['ADMIN'], // Cambiado a arreglo para compatibilidad con split/join
-    numeroEmpleado: '7854'
+    roles: ['ADMIN']    
   }
 };

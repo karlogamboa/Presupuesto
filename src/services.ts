@@ -15,9 +15,7 @@ function getAuthHeaders(): HeadersInit {
       'x-user-email': String(config.DEFAULT_DEV_USER.email).trim().toLowerCase(),
       'x-user-roles': Array.isArray(config.DEFAULT_DEV_USER.roles)
         ? config.DEFAULT_DEV_USER.roles.map(r => String(r).trim().toLowerCase()).join(',')
-        : String(config.DEFAULT_DEV_USER.roles).trim().toLowerCase(),
-      'x-user-numeroEmpleado': String(config.DEFAULT_DEV_USER.numeroEmpleado).trim(),
-      'x-user-id': String(config.DEFAULT_DEV_USER.numeroEmpleado).trim()
+        : String(config.DEFAULT_DEV_USER.roles).trim().toLowerCase()
     };
   }
   
@@ -105,11 +103,7 @@ export async function validateToken(): Promise<boolean> {
 
 // Función para obtener información del usuario
 export async function fetchUserInfo(email?: string) {
-  // En modo desarrollo, retornar usuario por defecto
-  if (config.DEVELOPMENT_MODE && !config.AUTH_ENABLED) {
-    return config.DEFAULT_DEV_USER;
-  }
-  
+  // En modo desarrollo, hacer fetch real usando el email si está presente
   const payload = email ? { email } : {};
   const res = await fetch(`${baseURL}/api/userInfo`, {
     method: 'POST',

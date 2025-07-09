@@ -26,28 +26,23 @@ function App() {
   const [resultados, setResultados] = useState<Resultado[]>([]);
   const [solicitanteSeleccionado, setSolicitanteSeleccionado] = useState<string>('');
   const [filtroEstatus, setFiltroEstatus] = useState<string>('Todos');
-  const [numeroEmpleadoFiltro, setNumeroEmpleadoFiltro] = useState<string>('');
 
   useEffect(() => {
-    if (numeroEmpleadoFiltro) {
-      fetchResultados(numeroEmpleadoFiltro)
-        .then((data) => {
-          const resultadosConCampos = (data ?? []).map((item: any) => ({
-            ...item,
-            cecos: item.cecos ?? item.centroCostos ?? '',
-            periodoPresupuesto: item.periodoPresupuesto ?? 'N/A',
-            proveedor: item.proveedor ?? 'N/A',
-          }));
-          setResultados(resultadosConCampos);
-        })
-        .catch(() => {
-          setResultados([]);
-          toast.error('Error al obtener resultados');
-        });
-    } else {
-      setResultados([]);
-    }
-  }, [numeroEmpleadoFiltro]);
+    fetchResultados()
+      .then((data) => {
+        const resultadosConCampos = (data ?? []).map((item: any) => ({
+          ...item,
+          cecos: item.cecos ?? item.centroCostos ?? '',
+          periodoPresupuesto: item.periodoPresupuesto ?? 'N/A',
+          proveedor: item.proveedor ?? 'N/A',
+        }));
+        setResultados(resultadosConCampos);
+      })
+      .catch(() => {
+        setResultados([]);
+        toast.error('Error al obtener resultados');
+      });
+  }, []);
 
   const handleFormSubmit = (data: any) => {
     setResultados(prev => [
@@ -71,9 +66,8 @@ function App() {
   const resultadosFiltrados = useMemo(() => {
     return resultados
       .filter(r => !solicitanteSeleccionado || r.solicitante === solicitanteSeleccionado)
-      .filter(r => filtroEstatus === 'Todos' || r.estatusConfirmacion === filtroEstatus)
-      .filter(r => !numeroEmpleadoFiltro || String(r.numeroEmpleado).trim() === String(numeroEmpleadoFiltro).trim());
-  }, [resultados, solicitanteSeleccionado, filtroEstatus, numeroEmpleadoFiltro]);
+      .filter(r => filtroEstatus === 'Todos' || r.estatusConfirmacion === filtroEstatus);
+  }, [resultados, solicitanteSeleccionado, filtroEstatus]);
 
   const estatusUnicos = useMemo(() => {
     return Array.from(new Set(resultados.map(r => r.estatusConfirmacion).filter((e): e is string => Boolean(e)))); // Filtrar valores undefined
@@ -86,9 +80,8 @@ function App() {
       <h1>Solicitud de Presupuesto</h1>
       <SolicitudGastoForm
         onSubmit={handleFormSubmit}
-        onNumeroEmpleadoChange={setNumeroEmpleadoFiltro}
       />
-      {numeroEmpleadoFiltro && (
+      {resultados.length > 0 ? (
         <>
           <h2 style={{ marginTop: 40 }}>Listado de Resultados</h2>
           <EstatusFilter
@@ -96,15 +89,13 @@ function App() {
             filtroEstatus={filtroEstatus}
             setFiltroEstatus={setFiltroEstatus}
           />
-          {resultadosFiltrados.length > 0 ? (
-            <ResultadosTabla
-              data={resultadosFiltrados}
-              onEstatusChange={handleEstatusChange}
-            />
-          ) : (
-            <NoResultsMessage />
-          )}
+          <ResultadosTabla
+            data={resultadosFiltrados}
+            onEstatusChange={handleEstatusChange}
+          />
         </>
+      ) : (
+        <NoResultsMessage />
       )}
     </div>
   );
