@@ -385,31 +385,27 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void, onNumer
       return;
     }
     if (selectedProvider.cuentaGastos && selectedProvider.cuentaGastos.trim() !== '') {
-      // Divide las cuentas del proveedor por comas y limpia espacios
       const cuentasProveedor = selectedProvider.cuentaGastos.split(',').map(cuenta => cuenta.trim());
-      
       const nuevasCategoriasFiltradas = categorias.filter(categoria => {
-        // Busca coincidencias exactas con el label de la categoría (cuentaDeGastos)
         const match = cuentasProveedor.some(cuentaProveedor => {
-          // Normalizamos quitando espacios extra y convirtiendo a minúsculas
           const categoriaLabelNormalizado = normalizeText(categoria.label);
           const cuentaProveedorNormalizada = normalizeText(cuentaProveedor);
           return categoriaLabelNormalizado === cuentaProveedorNormalizada;
         });
-        
         return match;
       });
-      
-      // Filtrar duplicados por label
       const categoriasSinDuplicados = nuevasCategoriasFiltradas.filter((categoria, index, self) =>
         index === self.findIndex(c => c.label === categoria.label)
       );
-      
-      setCategoriasFiltradas(categoriasSinDuplicados.map(categoria => ({
-        ...categoria,
-        label: categoria.label
-      })));
-      
+      // Si no hay coincidencias, mostrar todas las categorías
+      if (categoriasSinDuplicados.length === 0) {
+        setCategoriasFiltradas(categorias);
+      } else {
+        setCategoriasFiltradas(categoriasSinDuplicados.map(categoria => ({
+          ...categoria,
+          label: categoria.label
+        })));
+      }
       if (categoriasSinDuplicados.length === 1) {
         const catUnica = categoriasSinDuplicados[0];
         setForm(prevForm => ({
