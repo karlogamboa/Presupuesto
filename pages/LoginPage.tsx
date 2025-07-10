@@ -38,15 +38,7 @@ const LoginPage: React.FC = () => {
   };
 
   return (
-    <div style={{ 
-      display: 'flex', 
-      flexDirection: 'column', 
-      alignItems: 'center', 
-      justifyContent: 'center',
-      minHeight: '100vh',
-      padding: '20px',
-      background: '#f5f5f5'
-    }}>
+    <div >
       <div style={{
         background: '#fff',
         padding: '40px',

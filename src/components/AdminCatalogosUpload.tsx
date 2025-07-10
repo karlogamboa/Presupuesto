@@ -16,6 +16,18 @@ const AdminCatalogosUpload: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ type: string; message: string; data?: any } | null>(null);
 
+  // Detectar tema (light/dark) desde el body
+  const [theme, setTheme] = useState<'dark' | 'light'>(
+    typeof window !== 'undefined' && document.body.classList.contains('dark') ? 'dark' : 'light'
+  );
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setTheme(document.body.classList.contains('dark') ? 'dark' : 'light');
+    });
+    observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+
   // Mostrar resultado aunque sea error, no limpiar result automáticamente
   useEffect(() => {
     if (result) {
@@ -74,22 +86,40 @@ const AdminCatalogosUpload: React.FC = () => {
   };
 
   return (
-    <div style={{
-      maxWidth: 600,
-      margin: '2rem auto',
-      background: '#fff',
-      borderRadius: 10,
-      boxShadow: '0 2px 10px #0001',
-      padding: 32
-    }}>
-      <h2 style={{ textAlign: 'center', marginBottom: 24 }}>Importar Catálogo (CSV)</h2>
+    <div
+      style={{
+        maxWidth: 600,
+        margin: '2rem auto',
+        background: theme === 'dark' ? '#232323' : '#fff',
+        borderRadius: 10,
+        boxShadow: theme === 'dark' ? '0 2px 16px #0008' : '0 2px 10px #0001',
+        padding: 32,
+        color: theme === 'dark' ? '#f3f3f3' : '#111',
+        transition: 'background 0.3s, color 0.3s'
+      }}
+    >
+      <h2 style={{
+        textAlign: 'center',
+        marginBottom: 24,
+        color: theme === 'dark' ? '#90caf9' : '#1976d2'
+      }}>
+        Importar Catálogo (CSV)
+      </h2>
       <form onSubmit={handleSubmit}>
         <div style={{ marginBottom: 18 }}>
           <label style={{ fontWeight: 600 }}>Catálogo:</label>
           <select
             value={catalog}
             onChange={e => setCatalog(e.target.value)}
-            style={{ width: '100%', padding: 8, borderRadius: 6, marginTop: 4 }}
+            style={{
+              width: '100%',
+              padding: 8,
+              borderRadius: 6,
+              marginTop: 4,
+              background: theme === 'dark' ? '#333' : '#fff',
+              color: theme === 'dark' ? '#f3f3f3' : '#111',
+              border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc'
+            }}
           >
             {CATALOG_OPTIONS.map(opt => (
               <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -103,11 +133,19 @@ const AdminCatalogosUpload: React.FC = () => {
             accept=".csv"
             onChange={e => setFile(e.target.files?.[0] || null)}
             required
-            style={{ width: '100%', padding: 8, borderRadius: 6, marginTop: 4 }}
+            style={{
+              width: '100%',
+              padding: 8,
+              borderRadius: 6,
+              marginTop: 4,
+              background: theme === 'dark' ? '#333' : '#fff',
+              color: theme === 'dark' ? '#f3f3f3' : '#111',
+              border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc'
+            }}
           />
         </div>
         <div style={{ marginBottom: 18 }}>
-          <label>
+          <label style={{ color: theme === 'dark' ? '#f3f3f3' : '#111' }}>
             <input
               type="checkbox"
               checked={replaceAll}
@@ -124,12 +162,13 @@ const AdminCatalogosUpload: React.FC = () => {
             width: '100%',
             padding: 12,
             borderRadius: 6,
-            background: loading ? '#ccc' : '#1976d2',
+            background: loading ? (theme === 'dark' ? '#444' : '#ccc') : '#1976d2',
             color: '#fff',
             fontWeight: 600,
             fontSize: 16,
             border: 'none',
-            cursor: loading ? 'not-allowed' : 'pointer'
+            cursor: loading ? 'not-allowed' : 'pointer',
+            transition: 'background 0.3s'
           }}
         >
           {loading ? 'Importando...' : 'Importar'}
@@ -139,16 +178,23 @@ const AdminCatalogosUpload: React.FC = () => {
         <div style={{
           margin: '32px auto',
           maxWidth: 600,
-          background: '#f7fafd',
-          border: '1px solid #cfd8dc',
+          background: theme === 'dark' ? '#181a1b' : '#f7fafd',
+          border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc',
           borderRadius: 8,
           padding: 24,
-          color: result.type === 'success' ? '#388e3c' : '#d32f2f',
+          color: result.type === 'success'
+            ? (theme === 'dark' ? '#66bb6a' : '#388e3c')
+            : (theme === 'dark' ? '#ef9a9a' : '#d32f2f'),
           fontSize: 15,
           wordBreak: 'break-word',
-          boxShadow: '0 2px 8px #0001'
+          boxShadow: theme === 'dark' ? '0 2px 8px #0008' : '0 2px 8px #0001'
         }}>
-          <h4 style={{ marginTop: 0, color: result.type === 'success' ? '#388e3c' : '#d32f2f' }}>
+          <h4 style={{
+            marginTop: 0,
+            color: result.type === 'success'
+              ? (theme === 'dark' ? '#66bb6a' : '#388e3c')
+              : (theme === 'dark' ? '#ef9a9a' : '#d32f2f')
+          }}>
             {result.type === 'success' ? 'Resultado de la importación' : 'Detalle del error'}
           </h4>
           <div>
@@ -157,7 +203,7 @@ const AdminCatalogosUpload: React.FC = () => {
           {result.data.errors && Array.isArray(result.data.errors) && result.data.errors.length > 0 && (
             <div style={{ marginTop: 12 }}>
               <strong>Errores:</strong>
-              <ul style={{ color: '#d32f2f', marginTop: 6 }}>
+              <ul style={{ color: theme === 'dark' ? '#ef9a9a' : '#d32f2f', marginTop: 6 }}>
                 {result.data.errors.map((err: string, idx: number) => (
                   <li key={idx} style={{ fontSize: 14 }}>{err}</li>
                 ))}

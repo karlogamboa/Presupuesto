@@ -74,10 +74,10 @@ function App() {
   }, [resultados]);
 
   return (
-    <div style={{ maxWidth: 900, margin: '0 auto', padding: 24 }}>
+    <div style={{ minHeight: '100vh', maxWidth: 900, margin: '0 auto', padding: 24 }}>
       <MenuUsuario />
       <ToastContainer position="top-right" autoClose={5000} hideProgressBar={false} newestOnTop closeOnClick pauseOnFocusLoss draggable pauseOnHover />
-      <h1>Solicitud de Presupuesto</h1>
+      
       <SolicitudGastoForm
         onSubmit={handleFormSubmit}
       />

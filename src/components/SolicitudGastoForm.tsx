@@ -7,7 +7,6 @@ import {
 } from '../services';
 import { globalUserInfo } from './MenuUsuario';
 import { toast } from 'react-toastify';
-import ResultadosTabla from './ResultadosTabla';
 import { useSolicitanteData } from '../hooks/useSolicitanteData';
 
 interface Option {
@@ -960,9 +959,6 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void }> = ({ 
               Solicitar
             </button>
           </form>
-          <div style={{ maxWidth: 900, margin: '2rem auto' }}>
-            <ResultadosTabla numeroEmpleado={form.numeroEmpleado} />
-          </div>
         </>
       )}
     </>

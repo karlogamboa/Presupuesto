@@ -85,20 +85,7 @@ const ResultadosTabla: React.FC<ResultadosTablaProps> = ({
   );
 
   return (
-    <div
-      style={{
-        margin: '2rem auto',
-        maxWidth: '100%',
-        background: theme === 'dark' ? '#212121' : '#f4f6fb',
-        borderRadius: 16,
-        padding: '2rem 1rem',
-        boxShadow: '0 4px 24px #0002',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        color: theme === 'dark' ? '#f3f3f3' : '#111',
-      }}
-    >
+    <div>
       <div style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
         <table
           style={{
