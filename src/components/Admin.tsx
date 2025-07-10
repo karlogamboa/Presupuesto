@@ -23,7 +23,7 @@ const camposFiltro = [
   { label: 'Cuenta Gastos', value: 'cuentaGastos' },
   { label: 'Periodo', value: 'periodoPresupuesto' },
   { label: 'Estatus', value: 'estatusConfirmacion' },
-  { label: 'Fecha', value: 'Fecha' },
+  { label: 'Fecha', value: 'fecha' }, // <-- corregido a 'fecha'
 ];
 
 const estatusOpciones = ['Pendiente', 'Confirmado', 'Rechazado'];
@@ -451,7 +451,7 @@ const Admin: React.FC = () => {
                             padding: 8,
                             color: theme === 'dark' ? '#f3f3f3' : '#111'
                           }}>
-                            {c.value === 'Fecha' && row[c.value]
+                            {c.value === 'fecha' && row[c.value]
                               ? new Date(row[c.value] ?? '').toLocaleDateString('es-MX')
                               : row[c.value]}
                           </td>
