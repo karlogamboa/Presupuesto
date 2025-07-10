@@ -16,3 +16,28 @@ export const config = {
     roles: ['ADMIN']    
   }
 };
+
+// Carga dinámica de configuración desde public/config.json
+export type AppConfig = {
+  LAMBDA_URL: string;
+  DEVELOPMENT_MODE: boolean;
+  AUTH_ENABLED: boolean;
+};
+
+export let dynamicConfig: AppConfig = {
+  LAMBDA_URL: '',
+  DEVELOPMENT_MODE: false,
+  AUTH_ENABLED: false
+};
+
+export async function loadDynamicConfig() {
+  try {
+    const resp = await fetch('/config.json');
+    if (!resp.ok) throw new Error('No se pudo cargar config.json');
+    dynamicConfig = await resp.json();
+    return dynamicConfig;
+  } catch (e) {
+    // Si falla, mantener valores por defecto
+    return dynamicConfig;
+  }
+}

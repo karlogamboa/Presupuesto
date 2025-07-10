@@ -1,0 +1,5 @@
+{
+  "LAMBDA_URL": "https://8nen0yni1m.execute-api.us-west-1.amazonaws.com/qa",
+  "DEVELOPMENT_MODE": true,
+  "AUTH_ENABLED": false
+}

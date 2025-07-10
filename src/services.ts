@@ -1,11 +1,11 @@
-import { config } from './config';
+import { config, dynamicConfig } from './config';
 
-// Usa variable de entorno para el backend con API Gateway
-const baseURL = config.API_BASE_URL;
+// Usar la URL dinámica si está disponible, si no la de build
+const baseURL = dynamicConfig.LAMBDA_URL || config.API_BASE_URL;
 
 // Valida que baseURL esté definida
 if (!baseURL) {
-  throw new Error('API_BASE_URL (VITE_LAMBDA_URL) no está definida. Revisa tu archivo .env y reinicia el servidor.');
+  throw new Error('API_BASE_URL no está definida. Revisa config.json o .env');
 }
 
 function getAuthHeaders(): HeadersInit {
