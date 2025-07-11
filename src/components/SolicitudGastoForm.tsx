@@ -427,6 +427,13 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void }> = ({ 
         toast.error(data?.error || 'Error al guardar el presupuesto');
         return;
       }
+      // Limpiar formulario y estados relacionados
+      setForm(initialForm);
+      setProveedor('');
+      setProveedorInput('');
+      setPeriodoPresupuesto('');
+      setSelectedProvider(null);
+      setCategoriasFiltradas(categorias);
     } catch (error: any) {
       toast.error('Error en la petición: ' + (error?.message || error));
       return;
@@ -488,35 +495,7 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void }> = ({ 
                 alignItems: 'center'
               }}
             >
-              <div className="form-group" style={{ gridColumn: '1 / 2' }}>
-                <label
-                  htmlFor="numeroEmpleado"
-                  style={{
-                    fontWeight: 500,
-                    marginBottom: 6,
-                    display: 'block',
-                    textAlign: 'left',
-                    color: theme === 'dark' ? '#f3f3f3' : '#111'
-                  }}
-                >Número de Empleado:</label>
-                <input
-                  id="numeroEmpleado"
-                  name="numeroEmpleado"
-                  value={form.numeroEmpleado}
-                  required
-                  readOnly
-                  style={{
-                    width: '100%',
-                    padding: 8,
-                    borderRadius: 6,
-                    border: theme === 'dark' ? '1px solid #444' : '1px solid #cfd8dc',
-                    background: theme === 'dark' ? '#333' : '#fff',
-                    color: theme === 'dark' ? '#f3f3f3' : '#111'
-                  }}
-                  className={theme === 'dark' ? 'input-dark-placeholder' : 'input-light-placeholder'}
-                />
-              </div>
-              <div className="form-group" style={{ gridColumn: '2 / 3' }}>
+              <div className="form-group" style={{ gridColumn: '1 / 3' }}>
                 <label style={{
                   fontWeight: 500,
                   marginBottom: 6,
