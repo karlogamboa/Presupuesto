@@ -353,7 +353,8 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void }> = ({ 
     } else if (name === 'subDepartamento') {
       setForm(f => ({
         ...f,
-        subDepartamento: value
+        subDepartamento: value,
+        centroCostos: value // Setea el ceco seleccionado en el input centroCostos
       }));
     } else if (name === 'categoriaGasto') {
       const categoriaSeleccionada = categoriasFiltradas.find(c => c.value === value);
@@ -599,7 +600,7 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void }> = ({ 
                 >
                   <option value="">Seleccione</option>
                   {subDepartamentos.map((opt, idx) => (
-                    <option key={opt.value + '-' + idx} value={opt.value}>{opt.label}</option>
+                    <option key={opt.value + '-' + idx} value={opt.value}>{opt.value}</option>
                   ))}
                 </select>
               </div>
