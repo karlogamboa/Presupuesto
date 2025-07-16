@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { fetchUserInfo, logout } from '../services';
+import { fetchUserInfo } from '../services';
 import { toast } from 'react-toastify';
 
 // Variable global para compartir info de usuario
@@ -72,8 +72,8 @@ const MenuUsuario: React.FC = () => {
 
   const handleLogout = async () => {
     try {
-      await logout();
-      window.location.href = '/login';
+      // Llama al endpoint de logout SAML
+      window.location.href = '/logout';
     } catch (error) {
       console.error('Error en logout:', error);
       // Forzar logout local aunque falle el servidor
