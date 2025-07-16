@@ -351,10 +351,12 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void }> = ({ 
       }
       setForm(f => ({ ...f, categoriaGasto: '', cuentaGastos: '' }));
     } else if (name === 'subDepartamento') {
+      // Extraer la parte antes del '-' para centroCostos
+      const ceco = value.includes('-') ? value.split('-')[0].trim() : value;
       setForm(f => ({
         ...f,
         subDepartamento: value,
-        centroCostos: value // Setea el ceco seleccionado en el input centroCostos
+        centroCostos: ceco
       }));
     } else if (name === 'categoriaGasto') {
       const categoriaSeleccionada = categoriasFiltradas.find(c => c.value === value);

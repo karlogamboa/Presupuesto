@@ -12,8 +12,8 @@ function getAuthHeaders(): HeadersInit {
   // En modo desarrollo sin auth, enviar headers de usuario mock
   if (config.DEVELOPMENT_MODE && !config.AUTH_ENABLED) {
     return {
-      'x-user-email': String(config.DEFAULT_DEV_USER.email).trim().toLowerCase(),
-      'x-user-roles': Array.isArray(config.DEFAULT_DEV_USER.roles)
+      'X-User-Email': String(config.DEFAULT_DEV_USER.email).trim().toLowerCase(),
+      'X-User-Roles': Array.isArray(config.DEFAULT_DEV_USER.roles)
         ? config.DEFAULT_DEV_USER.roles.map(r => String(r).trim().toLowerCase()).join(',')
         : String(config.DEFAULT_DEV_USER.roles).trim().toLowerCase()
     };
