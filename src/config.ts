@@ -1,33 +1,22 @@
+// Configuración centralizada. No usar valores hardcodeados fuera de este archivo.
+
 // Configuración de la aplicación
 export const config = {
-  // Modo desarrollo - deshabilita autenticación
-  DEVELOPMENT_MODE: import.meta.env.VITE_DEVELOPMENT_MODE === 'true',
   
   // APIs
   API_BASE_URL: import.meta.env.VITE_LAMBDA_URL,
-  
-  // Autenticación
-  AUTH_ENABLED: import.meta.env.VITE_AUTH_ENABLED !== 'false',
-  
-  // Usuario por defecto para desarrollo
-  DEFAULT_DEV_USER: {
-    email: 'karlo@zicral.com',
-    name: 'Usuario Desarrollo',
-    roles: ['ADMIN']    
-  }
+  OKTA_SLO_URL: import.meta.env.VITE_OKTA_SLO_URL
 };
 
 // Carga dinámica de configuración desde public/config.json
 export type AppConfig = {
   LAMBDA_URL: string;
-  DEVELOPMENT_MODE: boolean;
-  AUTH_ENABLED: boolean;
+  OKTA_SLO_URL?: string;
 };
 
 export let dynamicConfig: AppConfig = {
   LAMBDA_URL: '',
-  DEVELOPMENT_MODE: false,
-  AUTH_ENABLED: false
+  OKTA_SLO_URL: ''
 };
 
 export async function loadDynamicConfig() {

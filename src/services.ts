@@ -1,5 +1,6 @@
 import { config, dynamicConfig } from './config';
 
+// Usar siempre config/dynamicConfig para URLs. No hardcodear.
 // Usar la URL dinámica si está disponible, si no la de build
 const baseURL = dynamicConfig.LAMBDA_URL || config.API_BASE_URL;
 
@@ -8,163 +9,83 @@ if (!baseURL) {
   throw new Error('API_BASE_URL no está definida. Revisa config.json o .env');
 }
 
-function getAuthHeaders(): HeadersInit {
-  // En modo desarrollo sin auth, enviar headers de usuario mock
-  if (config.DEVELOPMENT_MODE && !config.AUTH_ENABLED) {
-    return {
-      'X-User-Email': String(config.DEFAULT_DEV_USER.email).trim().toLowerCase(),
-      'X-User-Roles': Array.isArray(config.DEFAULT_DEV_USER.roles)
-        ? config.DEFAULT_DEV_USER.roles.map(r => String(r).trim().toLowerCase()).join(',')
-        : String(config.DEFAULT_DEV_USER.roles).trim().toLowerCase()
-    };
+// Elimina el guardado y uso de JWT
+// Guarda el token si viene en la URL (ejemplo: ?token=eyJ...)
+(function saveTokenFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get('token');
+  if (token) {
+    localStorage.setItem('jwt', token);
+    // Opcional: limpiar el token de la URL para evitar que se comparta
+    window.history.replaceState({}, document.title, window.location.pathname);
   }
-  
-  const token = localStorage.getItem('access_token') || localStorage.getItem('api_gateway_token');
-  return token ? { 'Authorization': `Bearer ${token}` } : {};
+})();
+
+function getJWT() {
+  const jwt = localStorage.getItem('jwt');
+  console.debug('[services] getJWT:', jwt);
+  return jwt;
 }
 
-// Función para login con API Gateway Authorizer
-export async function loginWithApiGateway(credentials: { username: string; password: string }) {
-  // En modo desarrollo, simular login exitoso
-  if (config.DEVELOPMENT_MODE && !config.AUTH_ENABLED) {
-    // Simular token falso con formato JWT para desarrollo
-    const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
-    const payload = btoa(
-      JSON.stringify({
-        ...config.DEFAULT_DEV_USER,
-        exp: Math.floor(Date.now() / 1000) + 24 * 60 * 60 // Expira en 24 horas
-      })
-    );
-    const fakeToken = `${header}.${payload}.devsignature`;
+function getAuthHeaders(): Record<string, string> {
+  const jwt = getJWT();
+  const headers: Record<string, string> = jwt ? { Authorization: `Bearer ${jwt}` } : {};
+  console.debug('[services] getAuthHeaders:', headers);
+  return headers;
+}
 
-    localStorage.setItem('access_token', fakeToken);
-    localStorage.setItem('api_gateway_token', fakeToken);
-
-    return {
-      token: fakeToken,
-      user: config.DEFAULT_DEV_USER,
-      message: 'Login en modo desarrollo'
-    };
-  }
-  
+// Función para obtener información del usuario autenticado desde el backend (SAML/cookie)
+// Siempre envía JWT en Authorization header
+export async function fetchUserInfo() {
+  console.log('[services] fetchUserInfo: llamando a', `${baseURL}/saml/user`);
+  console.log('[services] document.cookie:', document.cookie);
+  const headers = getAuthHeaders();
+  console.log('[services] fetchUserInfo: headers', headers);
+  // Solo usa la cookie SAML, no envíes Authorization
   try {
-    const res = await fetch(`${baseURL}/api/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(credentials),
+    const response = await fetch(`${baseURL}/saml/user`, {
+      credentials: 'include',
+      headers
     });
-    
-    if (!res.ok) {
-      throw new Error('Credenciales inválidas');
+    console.log('[services] fetchUserInfo: response', response);
+    if (!response.ok) {
+      const text = await response.text();
+      console.error('[services] fetchUserInfo: response no ok', response.status, response.statusText, text);
+      // Lanzar el objeto Response para que el consumidor pueda manejarlo
+      throw response;
     }
-    
-    const data = await res.json();
-    
-    if (data.token) {
-      localStorage.setItem('access_token', data.token);
-      localStorage.setItem('api_gateway_token', data.token);
-      return data;
+    // Verifica si hay contenido antes de parsear JSON
+    const text = await response.text();
+    if (!text) {
+      console.warn('[services] fetchUserInfo: respuesta vacía');
+      return null;
     }
-    
-    throw new Error('No se recibió token de autenticación');
-  } catch (error) {
-    console.error('Error en login:', error);
-    throw error;
+    const json = JSON.parse(text);
+    console.log('[services] fetchUserInfo: json', json);
+    return json;
+  } catch (err) {
+    console.error('[services] fetchUserInfo: catch', err);
+    throw err;
   }
 }
 
-// Función para validar token con API Gateway
-export async function validateToken(): Promise<boolean> {
-  // En modo desarrollo sin auth, siempre válido si hay token
-  if (config.DEVELOPMENT_MODE && !config.AUTH_ENABLED) {
-    const token = localStorage.getItem('access_token');
-    return !!token;
-  }
-  
-  try {
-    const token = localStorage.getItem('access_token');
-    if (!token) return false;
-
-    const res = await fetch(`${baseURL}/api/auth/validate`, {
-      headers: { ...getAuthHeaders() }
-    });
-    
-    if (!res.ok) {
-      console.warn(`Token validation failed: ${res.status} ${res.statusText}`);
-      return false;
-    }
-    
-    return true;
-  } catch (error) {
-    console.error('Error validating token:', error);
-    return false;
-  }
-}
-
-// Función para obtener información del usuario
-export async function fetchUserInfo(email?: string) {
-  // En modo desarrollo, hacer fetch real usando el email si está presente
-  const payload = email ? { email } : {};
-  const res = await fetch(`${baseURL}/api/userInfo`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-    body: JSON.stringify(payload),
-  });
-  const data = await res.json();
-  return data || {};
-}
-
-// Función de logout actualizada
-export async function logout() {
-  // En modo desarrollo, solo limpiar localStorage
-  if (config.DEVELOPMENT_MODE && !config.AUTH_ENABLED) {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('api_gateway_token');
-    localStorage.removeItem('id_token');
-    return;
-  }
-  
-  try {
-    const token = localStorage.getItem('access_token');
-    if (token) {
-      await fetch(`${baseURL}/api/auth/logout`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-        body: JSON.stringify({ token }),
-      });
-    }
-  } catch (error) {
-    console.error('Error en logout:', error);
-  } finally {
-    // Limpiar tokens independientemente del resultado
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('api_gateway_token');
-    localStorage.removeItem('id_token');
-  }
-}
-
-
-// --- Solicitudes relacionadas ---
-export async function fetchSolicitantes() {
-  const res = await fetch(`${baseURL}/api/solicitantes`, {
-    headers: { ...getAuthHeaders() }
-  });
-  return res.json();
-}
-
-
+// --- Todas las llamadas a /api/* deben enviar el JWT ---
 let departamentosPromise: Promise<any> | null = null;
 export async function fetchDepartamentos() {
   if (!departamentosPromise) {
     departamentosPromise = fetch(`${baseURL}/api/departamentos`, {
-      headers: { ...getAuthHeaders() }
+      credentials: 'include',
+      headers: getAuthHeaders()
     })
-      .then(res => {
+      .then(async res => {
         if (!res.ok) {
-          console.error('Error al obtener departamentos:', res.status);
-          throw new Error(`Error al obtener departamentos: ${res.status}`);
+          const text = await res.text();
+          console.error('Error al obtener departamentos:', res.status, text);
+          throw new Error(`Error al obtener departamentos: ${res.status} ${text}`);
         }
-        return res.json();
+        const text = await res.text();
+        if (!text) return [];
+        return JSON.parse(text);
       })
       .then(data => {
         /*
@@ -212,7 +133,7 @@ export async function fetchDepartamentos() {
       })
       .catch(err => {
         console.error('Error procesando departamentos:', err);
-        return []; // Devuelve un array vacío en caso de error
+        return [];
       })
       .finally(() => {
         departamentosPromise = null;
@@ -225,9 +146,19 @@ let proveedoresPromise: Promise<any> | null = null;
 export async function fetchProveedores() {
   if (!proveedoresPromise) {
     proveedoresPromise = fetch(`${baseURL}/api/proveedores`, {
-      headers: { ...getAuthHeaders() }
+      credentials: 'include',
+      headers: getAuthHeaders()
     })
-      .then(res => res.json())
+      .then(async res => {
+        if (!res.ok) {
+          const text = await res.text();
+          console.error('Error al obtener proveedores:', res.status, text);
+          throw new Error(`Error al obtener proveedores: ${res.status} ${text}`);
+        }
+        const text = await res.text();
+        if (!text) return [];
+        return JSON.parse(text);
+      })
       .then((data: any[]) => {
         // Normaliza para que cada proveedor tenga value, label, cuentasGasto, categoria, etc.
         return (data || []).map((prov: any) => ({
@@ -254,15 +185,25 @@ let categoriasGastoPromise: Promise<any> | null = null;
 export async function fetchCategoriasGasto() {
   if (!categoriasGastoPromise) {
     categoriasGastoPromise = fetch(`${baseURL}/api/categorias-gasto`, {
-      headers: { ...getAuthHeaders() }
+      credentials: 'include',
+      headers: getAuthHeaders()
     })
-      .then(res => res.json())
+      .then(async res => {
+        if (!res.ok) {
+          const text = await res.text();
+          console.error('Error al obtener categorias gasto:', res.status, text);
+          throw new Error(`Error al obtener categorias gasto: ${res.status} ${text}`);
+        }
+        const text = await res.text();
+        if (!text) return [];
+        return JSON.parse(text);
+      })
       .then((data: any[]) => {
         // Normaliza para que cada categoría tenga value, label, cuenta, descripcion, etc.
         return (data || []).map((cat: any) => ({
           ...cat,
-          value: cat.cuenta || cat.id || '', // value para selects
-          label: cat.cuentaDeGastos || cat.nombre || '', // label para selects (priorizar cuentaDeGastos)
+          value: cat.cuenta || cat.id || '',
+          label: cat.cuentaDeGastos || cat.nombre || '',
           nombre: cat.nombre || '',
           descripcion: cat.descripcion || '',
           saldo: cat.saldo,
@@ -277,69 +218,97 @@ export async function fetchCategoriasGasto() {
 
 export async function fetchCorreos() {
   const res = await fetch(`${baseURL}/api/correos`, {
-    headers: { ...getAuthHeaders() }
+    credentials: 'include',
+    headers: getAuthHeaders()
   });
-  return res.json();
+  if (!res.ok) {
+    const text = await res.text();
+    console.error('Error al obtener correos:', res.status, text);
+    throw new Error(`Error al obtener correos: ${res.status} ${text}`);
+  }
+  const text = await res.text();
+  if (!text) return [];
+  return JSON.parse(text);
 }
 
 // --- Endpoints usados en componentes ---
-export async function fetchSolicitanteByNumeroEmpleado(numEmpleado: string) {
-  const res = await fetch(`${baseURL}/api/solicitantes/${encodeURIComponent(numEmpleado)}`, {
-    headers: { ...getAuthHeaders() }
-  });
-  // El backend regresa un objeto como:
-  // {
-  //   "id": "...",
-  //   "nombre": "...",
-  //   "subsidiaria": "...",
-  //   "departamento": "...",
-  //   "puestoTrabajo": "...",
-  //   "aprobadorGastos": false,
-  //   "idInterno": ...
-  // }
-  // Normaliza el resultado para que siempre tenga las propiedades esperadas
-  const data = await res.json();
-  // Renombra 'correo' a 'Correo electrónico' si es necesario
-  if (data?.correo && !data['Correo electrónico']) {
-    data['Correo electrónico'] = data.correo;
-  }
-  return data;
-}
 
 export async function guardarPresupuesto(payload: any) {
   const res = await fetch(`${baseURL}/api/solicitudes-presupuesto`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify(payload),
+    credentials: 'include',
+    headers: {
+      ...getAuthHeaders(),
+      'Content-Type': 'application/json'
+    }
   });
-  return res.json();
+  if (!res.ok) {
+    const text = await res.text();
+    console.error('Error al guardar presupuesto:', res.status, text);
+    throw new Error(`Error al guardar presupuesto: ${res.status} ${text}`);
+  }
+  const text = await res.text();
+  if (!text) return {};
+  return JSON.parse(text);
 }
 
 export async function fetchResultados(numEmpleado?: string) {
   const url = numEmpleado
     ? `${baseURL}/api/solicitudes-presupuesto?numeroEmpleado=${encodeURIComponent(numEmpleado)}`
     : `${baseURL}/api/solicitudes-presupuesto`;
-  const res = await fetch(url, { headers: { ...getAuthHeaders() } });
-  return res.json();
+  const res = await fetch(url, {
+    credentials: 'include',
+    headers: getAuthHeaders()
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    console.error('Error al obtener resultados:', res.status, text);
+    throw new Error(`Error al obtener resultados: ${res.status} ${text}`);
+  }
+  const text = await res.text();
+  if (!text) return [];
+  return JSON.parse(text);
 }
 
 export async function editarEstatusSolicitud(estatusConfirmacion: string, solicitud: any) {
-  let headers: HeadersInit = { 'Content-Type': 'application/json', ...getAuthHeaders() };
   const res = await fetch(`${baseURL}/api/solicitudes-presupuesto/cambiar-estatus`, {
     method: 'PUT',
-    headers,
     body: JSON.stringify({ estatusConfirmacion, solicitud }),
+    credentials: 'include',
+    headers: {
+      ...getAuthHeaders(),
+      'Content-Type': 'application/json'
+    }
   });
-  return res.json();
+  if (!res.ok) {
+    const text = await res.text();
+    console.error('Error al editar estatus solicitud:', res.status, text);
+    throw new Error(`Error al editar estatus solicitud: ${res.status} ${text}`);
+  }
+  const text = await res.text();
+  if (!text) return {};
+  return JSON.parse(text);
 }
 
 export async function sendEmail({ to, subject, body }: { to: string; subject: string; body: string }) {
   const res = await fetch(`${baseURL}/api/emails/send`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify({ to, subject, body }),
+    credentials: 'include',
+    headers: {
+      ...getAuthHeaders(),
+      'Content-Type': 'application/json'
+    }
   });
-  return res.json();
+  if (!res.ok) {
+    const text = await res.text();
+    console.error('Error al enviar email:', res.status, text);
+    throw new Error(`Error al enviar email: ${res.status} ${text}`);
+  }
+  const text = await res.text();
+  if (!text) return {};
+  return JSON.parse(text);
 }
 
 // Importar catálogos desde archivos CSV
@@ -348,29 +317,30 @@ export async function importCatalogCSV(catalog: string, file: File, replaceAll: 
     const formData = new FormData();
     formData.append('file', file);
     formData.append('replaceAll', String(replaceAll));
-    
     const response = await fetch(`${baseURL}/api/${catalog}/import-csv`, {
       method: 'POST',
-      headers: {
-        ...getAuthHeaders()
-        // No incluimos Content-Type porque FormData lo establece automáticamente con el boundary
-      },
       body: formData,
+      credentials: 'include',
+      headers: getAuthHeaders()
     });
-    
-    const data = await response.json();
-    
-    // Si el servidor devuelve un error específico, incluirlo en la respuesta
+    const text = await response.text();
+    let data = {};
+    if (text) {
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        data = { message: text };
+      }
+    }
     if (!response.ok) {
       console.error(`Error al importar catálogo ${catalog}:`, data);
       return {
         success: false,
-        message: data.message || `Error ${response.status}: ${response.statusText}`,
+        message: (data as any).message || `Error ${response.status}: ${response.statusText}`,
         statusCode: response.status,
         ...data
       };
     }
-    
     return {
       success: true,
       ...data
@@ -385,3 +355,7 @@ export async function importCatalogCSV(catalog: string, file: File, replaceAll: 
   }
 }
 
+// --- CORS: Asegúrate que el backend/API Gateway reenvía los headers CORS en todas las respuestas /api/* ---
+// Verifica en DevTools que los headers Access-Control-Allow-Origin, etc. están presentes.
+
+// El frontend está correcto. El backend responde 403 porque no tienes sesión/JWT.

@@ -1,5 +1,4 @@
 {
-  "LAMBDA_URL": "https://8nen0yni1m.execute-api.us-west-1.amazonaws.com/qa",
-  "DEVELOPMENT_MODE": true,
-  "AUTH_ENABLED": false
+  "LAMBDA_URL": "https://v9hhsb7ju3.execute-api.us-east-2.amazonaws.com/qa",
+  "OKTA_SLO_URL": "https://trial-4567848.okta.com/login/signout"
 }

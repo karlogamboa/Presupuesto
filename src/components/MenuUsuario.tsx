@@ -1,96 +1,45 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { fetchUserInfo } from '../services';
-import { toast } from 'react-toastify';
+import { useSolicitanteData } from '../hooks/useSolicitanteData';
+import { config, dynamicConfig } from '../config';
 
-// Variable global para compartir info de usuario
-export let globalUserInfo: { email?: string; name?: string; role?: string | string[]; numeroEmpleado?: string } | null = null;
-export function setGlobalUserInfo(user: typeof globalUserInfo) {
-  globalUserInfo = user;
-  // Notifica a listeners si es necesario (ejemplo: window event)
-  window.dispatchEvent(new CustomEvent('globalUserInfoUpdated'));
-}
+// Usar siempre config/dynamicConfig para URLs. No hardcodear.
+const baseURL = dynamicConfig.LAMBDA_URL || config.API_BASE_URL;
 
 const MenuUsuario: React.FC = () => {
-  const [user, setUser] = useState<{ email?: string; name?: string; roles?: string | string[]; numeroEmpleado?: string } | null>(null);
   const navigate = useNavigate();
-  const fetchedRef = useRef(false);
+  const { empleado } = useSolicitanteData();
+  const user = empleado;
 
-  useEffect(() => {
-    // Si ya existe la variable global y tiene numeroEmpleado, úsala y no vuelvas a hacer fetch ni cambiar el dato global
-    if (globalUserInfo && globalUserInfo.numeroEmpleado) {
-      setUser(globalUserInfo);
-      return;
-    }
+  // Extrae roles desde authorities si existen (solo si existen en el objeto)
+  const roles =
+    (user && 'authorities' in user && Array.isArray((user as any).authorities))
+      ? (user as any).authorities.map((a: any) => a.authority)
+      : user?.roles;
 
-    if (fetchedRef.current) return; // Evita llamadas múltiples
-    fetchedRef.current = true;
+  const isAdmin =
+    roles === 'ADMIN' ||
+    (typeof roles === 'string' && roles.includes('ADMIN')) ||
+    (Array.isArray(roles) && roles.includes('Admin'));
 
-    // Primero intenta obtener el email y el rol del id_token
-    const idToken = localStorage.getItem('id_token');
-    let email: string | undefined = undefined;
-    let roles: string | string[] | undefined = undefined;
-    let numeroEmpleado: string | undefined = undefined;
-    if (idToken) {
-      try {
-        const payload = JSON.parse(atob(idToken.split('.')[1]));
-        email = payload.email;
-        roles = payload.role || payload.roles;
-        numeroEmpleado = payload.numeroEmpleado || payload.numero_empleado;
-      } catch {
-        // No email ni role
-      }
-    }
-    // Si ya hay rol y numeroEmpleado, setea ambos y la variable global, pero no vuelvas a hacer fetch
-    if (roles && numeroEmpleado) {
-      const userObj = {
-        email,
-        name: email,
-        roles,
-        numeroEmpleado,
-      };
-      setUser(userObj);
-      setGlobalUserInfo(userObj);
-      return;
-    }
-    // Si no hay rol o numeroEmpleado, solicita el perfil del usuario al backend (userinfo) enviando el email
-    fetchUserInfo()
-      .then(data => {
-        const userObj = {
-          email: data.email,
-          name: data.name || data.preferred_username || data.email,
-          roles: data.role || data.roles,
-          numeroEmpleado: data.numeroEmpleado || data.numero_empleado,
-        };
-        setUser(userObj);
-        setGlobalUserInfo(userObj);
-      })
-      .catch(() => {
-        toast.error('Error al obtener información del usuario');
-      });
-  }, []);
+  // Extrae employeeNumber si existe (solo si existe en el objeto)
+  const numeroEmpleado =
+    (user && 'employeeNumber' in user)
+      ? (user as any).employeeNumber
+      : user?.numeroEmpleado;
 
   const handleLogout = async () => {
-    try {
-      // Llama al endpoint de logout SAML
-      window.location.href = '/logout';
-    } catch (error) {
-      console.error('Error en logout:', error);
-      // Forzar logout local aunque falle el servidor
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('api_gateway_token');
-      localStorage.removeItem('id_token');
-      window.location.href = '/login';
+    // Redirige a Okta SLO si está configurado, si no al backend
+    const oktaSloUrl = dynamicConfig.OKTA_SLO_URL || config.OKTA_SLO_URL;
+    if (oktaSloUrl) {
+      console.log('[MenuUsuario] Redirigiendo a OKTA SLO:', oktaSloUrl);
+      window.location.href = oktaSloUrl;
+    } else {
+      window.location.href = `${baseURL}/logout`;
     }
   };
 
   if (!user) return null;
-
-  // Determina si el usuario es admin
-  const isAdmin =
-    user.roles === 'ADMIN' ||
-    (typeof user.roles === 'string' && user.roles.includes('ADMIN')) ||
-    (Array.isArray(user.roles) && user.roles.includes('ADMIN'));
 
   return (
     <div
@@ -124,11 +73,15 @@ const MenuUsuario: React.FC = () => {
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
         <span style={{ fontWeight: 600 }}>
-          Usuario: {user.name || user.email}
+          Usuario: {
+            (user && 'userName' in user && typeof (user as any).userName === 'object')
+              ? `${(user as any).userName.givenName} ${(user as any).userName.familyName}`
+              : (user && 'userName' in user ? (user as any).userName : user.nombre || user.correo)
+          }
         </span>
-        {user.numeroEmpleado && (
+        {numeroEmpleado && (
           <span style={{ fontWeight: 500, color: '#1976d2' }}>
-            Número Empleado: {user.numeroEmpleado}
+            Número Empleado: {numeroEmpleado}
           </span>
         )}
         <button
@@ -184,6 +137,5 @@ const MenuUsuario: React.FC = () => {
     </div>
   );
 };
-
 
 export default MenuUsuario;

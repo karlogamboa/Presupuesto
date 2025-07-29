@@ -1,11 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import {
-  fetchDepartamentos,
-  fetchCategoriasGasto,
-  fetchProveedores,
-  guardarPresupuesto
-} from '../services';
-import { globalUserInfo } from './MenuUsuario';
+import { fetchDepartamentos, fetchCategoriasGasto, fetchProveedores, guardarPresupuesto } from '../services';
 import { toast } from 'react-toastify';
 import { useSolicitanteData } from '../hooks/useSolicitanteData';
 
@@ -15,7 +9,14 @@ interface Option {
   numeroEmpleado?: string;
   cuentaGastos?: string;
   categoriaGasto?: string;
-  Descripción?: string; // Agregar la propiedad Descripción
+  descripcion?: string;
+}
+
+interface DepartamentoData {
+  value: string;
+  label: string;
+  departamento: string;
+  subdepartamentos: string[];
 }
 
 interface FormData {
@@ -32,23 +33,23 @@ interface FormData {
   periodoPresupuesto?: string;
 }
 
+
 const initialForm: FormData = {
   solicitante: '',
-  departamento: '',
+  correo: '',
   numeroEmpleado: '',
+  departamento: '',
   subDepartamento: '',
   centroCostos: '',
   categoriaGasto: '',
   cuentaGastos: '',
   montoSubtotal: '',
-  correo: '',
   proveedor: '',
   periodoPresupuesto: '',
 };
 
-// Helper hooks and functions extracted for clarity and reduced complexity
 
-function usePeriodos() {
+function usePeriodos(): string[] {
   const [periodos, setPeriodos] = useState<string[]>([]);
   useEffect(() => {
     const currentYear = new Date().getFullYear();
@@ -61,66 +62,11 @@ function usePeriodos() {
   return periodos;
 }
 
-function useDepartamentos(setDepartamentosData: (data: any[]) => void, setDepartamentos: (opts: Option[]) => void) {
-  useEffect(() => {
-    fetchDepartamentos()
-      .then((data: any[]) => {
-        setDepartamentosData(data || []);
-        // Ahora data ya contiene departamentos únicos con sus subdepartamentos agrupados
-        setDepartamentos(
-          (data || []).map((dep: any) => ({
-            value: dep.value || dep.departamento || '',
-            label: dep.label || dep.departamento || ''
-          }))
-        );
-      })
-      .catch((error) => console.error("Error al cargar departamentos:", error));
-  }, [setDepartamentosData, setDepartamentos]);
-}
-
-function useCategorias(setCategorias: (opts: Option[]) => void, setCategoriasFiltradas: (opts: Option[]) => void) {
-  useEffect(() => {
-    fetchCategoriasGasto()
-      .then((data: any[]) => {
-        const categoriasData = (data || []).map((d: any) => ({
-          value: String(d.cuenta || d.Cuenta || ''),
-          label: d.label || '',
-        }));
-        setCategorias(categoriasData);
-        setCategoriasFiltradas(
-          categoriasData.filter((categoria: Option, index: number, self: Option[]) =>
-            index === self.findIndex((c: Option) => c.label === categoria.label)
-          )
-        );
-      })
-      .catch((error) => console.error("Error al cargar categorías de gasto:", error));
-  }, [setCategorias, setCategoriasFiltradas]);
-}
-
-function useProveedores(setProveedores: (opts: Option[]) => void) {
-  useEffect(() => {
-    fetchProveedores()
-      .then((data: any[]) => {
-        const lista = (data || []).map((d: any) => {
-          return {
-            value: String(d.nombre || d.id || '').trim(),
-            label: String(d.nombre || '').trim(),
-            numeroEmpleado: d.numeroProveedor || d['Número Proveedor'] || '',
-            cuentaGastos: d.cuentaGastos || '', // Ya normalizado en services.ts
-            categoriaGasto: d.categoria || d.Categoría || '',
-          };
-        });
-        setProveedores(lista);
-      })
-      .catch((error) => console.error("Error al cargar proveedores:", error));
-  }, [setProveedores]);
-}
-
 const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void }> = ({ onSubmit }) => {
   const [form, setForm] = useState<FormData>(initialForm);
   const [departamentos, setDepartamentos] = useState<Option[]>([]);
   const [subDepartamentos, setSubDepartamentos] = useState<Option[]>([]);
-  const [departamentosData, setDepartamentosData] = useState<any[]>([]);
+  const [departamentosData, setDepartamentosData] = useState<DepartamentoData[]>([]);
   const [categorias, setCategorias] = useState<Option[]>([]);
   const [proveedores, setProveedores] = useState<Option[]>([]);
   const [proveedor, setProveedor] = useState<string>('');
@@ -129,27 +75,27 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void }> = ({ 
   const [empresa, setEmpresa] = useState<string>('');
   const [categoriasFiltradas, setCategoriasFiltradas] = useState<Option[]>([]);
   const [selectedProvider, setSelectedProvider] = useState<Option | null>(null);
-  const [numeroEmpleadoCargado, setNumeroEmpleadoCargado] = useState<string>('');
   const periodos = usePeriodos();
   const [periodoPresupuesto, setPeriodoPresupuesto] = useState<string>('');
   const [loading, setLoading] = useState(true);
 
-  // Nuevo: usar el hook para obtener y parsear datos del solicitante
-  const { empleado: solicitanteParsed } = useSolicitanteData(form.numeroEmpleado || globalUserInfo?.numeroEmpleado);
+  // Centraliza obtención de datos de usuario autenticado vía SAML (backend)
+  const { empleado } = useSolicitanteData();
 
-  // Sincronizar el form con los datos parseados del solicitante
+
+  // Hook para inicializar datos de usuario SAML/Okta usando hook global
   useEffect(() => {
-    if (solicitanteParsed) {
+    if (empleado) {
       setForm(prevForm => ({
         ...prevForm,
-        solicitante: solicitanteParsed.nombre,
-        correo: solicitanteParsed.correo,
-        departamento: solicitanteParsed.departamento,
-        subDepartamento: solicitanteParsed.subDepartamento,
-        centroCostos: solicitanteParsed.centroCostos
+        solicitante: empleado.nombre || '',
+        correo: empleado.correo || '',
+        departamento: empleado.departamento || '',
+        subDepartamento: empleado.subDepartamento || '',
+        centroCostos: empleado.centroCostos || '',
       }));
-      setEmpresa(solicitanteParsed.empresa);
-    } else if (form.numeroEmpleado) {
+      setEmpresa(empleado.empresa || '');
+    } else {
       setForm(f => ({
         ...f,
         solicitante: '',
@@ -160,40 +106,29 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void }> = ({ 
       }));
       setEmpresa('');
     }
-  }, [solicitanteParsed]);
+  }, [empleado]);
 
-  // Obtener el número de empleado solo una vez desde globalUserInfo
+
+  // Hook para cargar catálogos y datos iniciales
   useEffect(() => {
     let isMounted = true;
     setLoading(true);
-    let numeroEmpleado: string | undefined = globalUserInfo?.numeroEmpleado;
-    if (!numeroEmpleado) {
-      const accessToken = localStorage.getItem('access_token');
-      if (accessToken) {
-        try {
-          const payload = JSON.parse(atob(accessToken.split('.')[1]));
-          if (!numeroEmpleado)
-            numeroEmpleado = payload.numeroEmpleado || payload.numero_empleado || payload.numEmpleado;
-        } catch {
-          // No-op
-        }
-      }
-    }
-    // Llama a todos los catálogos y datos iniciales en paralelo
-    Promise.all([
-      fetchDepartamentos().then((data: any[]) => {
+    const cargarCatalogos = async () => {
+      try {
+        const [departamentosDataResp, categoriasDataResp, proveedoresDataResp] = await Promise.all([
+          fetchDepartamentos(),
+          fetchCategoriasGasto(),
+          fetchProveedores()
+        ]);
         if (!isMounted) return;
-        setDepartamentosData(data || []);
+        setDepartamentosData(departamentosDataResp || []);
         setDepartamentos(
-          (data || []).map((dep: any) => ({
+          (departamentosDataResp || []).map((dep: any) => ({
             value: dep.value || dep.departamento || '',
             label: dep.label || dep.departamento || ''
           }))
         );
-      }),
-      fetchCategoriasGasto().then((data: any[]) => {
-        if (!isMounted) return;
-        const categoriasData = (data || []).map((d: any) => ({
+        const categoriasData = (categoriasDataResp || []).map((d: any) => ({
           value: String(d.cuenta || d.Cuenta || ''),
           label: d.label || '',
         }));
@@ -203,41 +138,21 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void }> = ({ 
             index === self.findIndex((c: Option) => c.label === categoria.label)
           )
         );
-      }),
-      fetchProveedores().then((data: any[]) => {
-        if (!isMounted) return;
-        const lista = (data || []).map((d: any) => {
-          return {
-            value: String(d.nombre || d.id || '').trim(),
-            label: String(d.nombre || '').trim(),
-            numeroEmpleado: d.numeroProveedor || d['Número Proveedor'] || '',
-            cuentaGastos: d.cuentaGastos || '',
-            categoriaGasto: d.categoria || d.Categoría || '',
-          };
-        });
+        const lista = (proveedoresDataResp || []).map((d: any) => ({
+          value: String(d.nombre || d.id || '').trim(),
+          label: String(d.nombre || '').trim(),
+          numeroEmpleado: d.numeroProveedor || d['Número Proveedor'] || '',
+          cuentaGastos: d.cuentaGastos || '',
+          categoriaGasto: d.categoria || d.Categoría || '',
+        }));
         setProveedores(lista);
-      }),
-      (async () => {
-        if (numeroEmpleado && numeroEmpleado !== '' && numeroEmpleado !== numeroEmpleadoCargado) {
-          setForm(f => ({
-            ...f,
-            numeroEmpleado
-          }));
-          setNumeroEmpleadoCargado(numeroEmpleado);
-        }
-      })()
-    ]).finally(() => {
-      if (isMounted) setLoading(false);
-    });
-
-    return () => {
-      isMounted = false;
+      } finally {
+        if (isMounted) setLoading(false);
+      }
     };
-  }, [numeroEmpleadoCargado]);
-
-  useDepartamentos(setDepartamentosData, setDepartamentos);
-  useCategorias(setCategorias, setCategoriasFiltradas);
-  useProveedores(setProveedores);
+    cargarCatalogos();
+    return () => { isMounted = false; };
+  }, []);
 
   useEffect(() => {
     if (form.departamento) {
@@ -268,159 +183,110 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void }> = ({ 
     }
   }, [form.departamento, form.subDepartamento, departamentosData]);
 
+  // Separar lógica de filtrado de proveedores
   useEffect(() => {
-    if (proveedorInput.trim() === '') {
-      setProveedoresFiltrados(proveedores);
-    } else {
-      setProveedoresFiltrados(
-        proveedores.filter(p =>
-          p.label.toLowerCase().includes(proveedorInput.toLowerCase())
-        )
-      );
-    }
+    setProveedoresFiltrados(filtrarProveedores(proveedores, proveedorInput));
   }, [proveedorInput, proveedores]);
 
+  // Separar lógica de filtrado de categorías
   useEffect(() => {
-    if (!selectedProvider) {
-      setCategoriasFiltradas(categorias);
-      setForm(prevForm => ({
-        ...prevForm,
-        categoriaGasto: '',
-        cuentaGastos: '',
-      }));
-      return;
-    }
-    if (selectedProvider.cuentaGastos && selectedProvider.cuentaGastos.trim() !== '') {
-      const cuentasProveedor = selectedProvider.cuentaGastos.split(',').map(cuenta => cuenta.trim());
-      const nuevasCategoriasFiltradas = categorias.filter(categoria => {
-        const match = cuentasProveedor.some(cuentaProveedor => {
-          const categoriaLabelNormalizado = normalizeText(categoria.label);
-          const cuentaProveedorNormalizada = normalizeText(cuentaProveedor);
-          return categoriaLabelNormalizado === cuentaProveedorNormalizada;
-        });
-        return match;
-      });
-      const categoriasSinDuplicados = nuevasCategoriasFiltradas.filter((categoria, index, self) =>
-        index === self.findIndex(c => c.label === categoria.label)
-      );
-      // Si no hay coincidencias, mostrar todas las categorías
-      if (categoriasSinDuplicados.length === 0) {
-        setCategoriasFiltradas(categorias);
-      } else {
-        setCategoriasFiltradas(categoriasSinDuplicados.map(categoria => ({
-          ...categoria,
-          label: categoria.label
-        })));
-      }
-      if (categoriasSinDuplicados.length === 1) {
-        const catUnica = categoriasSinDuplicados[0];
-        setForm(prevForm => ({
-          ...prevForm,
-          categoriaGasto: catUnica.value,
-          cuentaGastos: catUnica.value,
-        }));
-      } else {
-        setForm(prevForm => ({
-          ...prevForm,
-          categoriaGasto: '',
-          cuentaGastos: '',
-        }));
-      }
-    } else {
-      setCategoriasFiltradas(categorias);
-      setForm(prevForm => ({
-        ...prevForm,
-        categoriaGasto: '',
-        cuentaGastos: '',
-      }));
-    }
+    setCategoriasFiltradas(filtrarCategorias(selectedProvider, categorias, setForm));
   }, [selectedProvider, categorias]);
 
+
+  // Handler simplificado para cambios en el formulario
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    if (name === 'proveedor') {
-      const provObject = proveedores.find(p => p.value === value);
-      if (provObject) {
-        setSelectedProvider(provObject);
-        setProveedor(value);
-        setForm(f => ({ ...f, proveedor: provObject.label }));
-      } else {
-        setSelectedProvider(null);
-        setProveedor('');
-        setForm(f => ({ ...f, proveedor: '' }));
+    setForm(f => {
+      switch (name) {
+        case 'proveedor': {
+          const provObject = proveedores.find(p => p.value === value);
+          setSelectedProvider(provObject || null);
+          setProveedor(value);
+          return {
+            ...f,
+            proveedor: provObject?.label || '',
+            categoriaGasto: '',
+            cuentaGastos: '',
+          };
+        }
+        case 'subDepartamento': {
+          const ceco = value.includes('-') ? value.split('-')[0].trim() : value;
+          return {
+            ...f,
+            subDepartamento: value,
+            centroCostos: ceco
+          };
+        }
+        case 'categoriaGasto': {
+          const categoriaSeleccionada = categoriasFiltradas.find(c => c.value === value);
+          return {
+            ...f,
+            categoriaGasto: value,
+            cuentaGastos: categoriaSeleccionada?.cuentaGastos || (selectedProvider?.cuentaGastos || '')
+          };
+        }
+        case 'departamento': {
+          return { ...f, departamento: value, subDepartamento: '', centroCostos: '' };
+        }
+        default:
+          return { ...f, [name]: value };
       }
-      setForm(f => ({ ...f, categoriaGasto: '', cuentaGastos: '' }));
-    } else if (name === 'subDepartamento') {
-      // Extraer la parte antes del '-' para centroCostos
-      const ceco = value.includes('-') ? value.split('-')[0].trim() : value;
-      setForm(f => ({
-        ...f,
-        subDepartamento: value,
-        centroCostos: ceco
-      }));
-    } else if (name === 'categoriaGasto') {
-      const categoriaSeleccionada = categoriasFiltradas.find(c => c.value === value);
-      setForm(f => ({
-        ...f,
-        categoriaGasto: value,
-        cuentaGastos: categoriaSeleccionada?.cuentaGastos || (selectedProvider?.cuentaGastos || '')
-      }));
-    } else if (name === 'departamento') {
-      setForm(f => ({ ...f, departamento: value, subDepartamento: '', centroCostos: '' }));
-    } else {
-      setForm(f => ({ ...f, [name]: value }));
-    }
+    });
   };
 
+
+  // Handler para input de proveedor, simplificado
   const handleProveedorInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setProveedorInput(value);
     setProveedor('');
     setForm(f => ({ ...f, proveedor: '', categoriaGasto: '', cuentaGastos: '' }));
-
-    // Nuevo: Si el texto coincide exactamente con un proveedor, selecciona ese proveedor
     const provObject = proveedores.find(
       p => p.label.trim().toLowerCase() === value.trim().toLowerCase()
     );
-    if (provObject) {
-      setSelectedProvider(provObject);
-      setForm(f => ({ ...f, proveedor: provObject.label }));
-      // Filtra categorías según el proveedor usando la misma lógica
-      if (provObject.cuentaGastos && provObject.cuentaGastos.trim() !== '') {
-        const cuentasProveedor = provObject.cuentaGastos.split(',').map(cuenta => cuenta.trim());
-        const nuevasCategoriasFiltradas = categorias.filter(categoria => {
-          return cuentasProveedor.some(cuentaProveedor => {
-            const categoriaLabelNormalizado = normalizeText(categoria.label);
-            const cuentaProveedorNormalizada = normalizeText(cuentaProveedor);
-            return categoriaLabelNormalizado === cuentaProveedorNormalizada;
-          });
-        });
-        setCategoriasFiltradas(nuevasCategoriasFiltradas);
-      } else {
-        setCategoriasFiltradas(categorias);
-      }
+    setSelectedProvider(provObject || null);
+    if (provObject && provObject.cuentaGastos && provObject.cuentaGastos.trim() !== '') {
+      const cuentasProveedor = provObject.cuentaGastos.split(',').map(cuenta => cuenta.trim());
+      setCategoriasFiltradas(
+        categorias.filter(categoria =>
+          cuentasProveedor.some(cuentaProveedor =>
+            normalizeText(categoria.label) === normalizeText(cuentaProveedor)
+          )
+        )
+      );
     } else {
-      setSelectedProvider(null);
       setCategoriasFiltradas(categorias);
     }
   };
 
+
+  // Handler para submit, simplificado
+  // Validación robusta y manejo de errores
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Validaciones adicionales
+    if (!form.solicitante || !form.correo || !form.departamento || !form.subDepartamento || !form.centroCostos) {
+      toast.error('Completa todos los campos obligatorios.');
+      return;
+    }
+    if (!form.montoSubtotal || isNaN(Number(form.montoSubtotal)) || Number(form.montoSubtotal) <= 0) {
+      toast.error('El monto solicitado debe ser mayor a 0.');
+      return;
+    }
+    if (!form.categoriaGasto) {
+      toast.error('Selecciona una cuenta de gastos.');
+      return;
+    }
     const categoriaSeleccionada = categoriasFiltradas.find(c => c.value === form.categoriaGasto);
     const proveedorSeleccionado = selectedProvider;
     const payload = {
+      ...form,
       solicitante: form.solicitante,
-      departamento: form.departamento,
-      numeroEmpleado: form.numeroEmpleado,
-      subDepartamento: form.subDepartamento,
-      centroCostos: form.centroCostos,
-      montoSubtotal: form.montoSubtotal,
-      correo: form.correo,
-      empresa,
       proveedor: proveedorSeleccionado?.label || proveedorInput || '',
       categoriaGasto: categoriaSeleccionada?.label || '',
       cuentaGastos: categoriaSeleccionada?.value || form.cuentaGastos,
+      empresa,
       periodoPresupuesto,
       Fecha: new Date().toISOString(),
     };
@@ -430,7 +296,6 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void }> = ({ 
         toast.error(data?.error || 'Error al guardar el presupuesto');
         return;
       }
-      // Limpiar formulario y estados relacionados
       setForm(initialForm);
       setProveedor('');
       setProveedorInput('');
@@ -954,11 +819,53 @@ function normalizeText(text: string): string {
   return text
     .trim()
     .toLowerCase()
-    .replace(/\s+/g, ' ') // Reemplaza múltiples espacios con uno solo
+    .replace(/\s+/g, ' ')
     .replace(/[áàäâã]/g, 'a')
     .replace(/[éèëê]/g, 'e')
     .replace(/[íìïî]/g, 'i')
     .replace(/[óòöô]/g, 'o')
     .replace(/[úùüû]/g, 'u')
     .replace(/[ñ]/g, 'n');
+}
+
+// Separar lógica de filtrado de proveedores
+function filtrarProveedores(proveedores: Option[], input: string): Option[] {
+  if (!input.trim()) return proveedores;
+  return proveedores.filter(p => p.label.toLowerCase().includes(input.toLowerCase()));
+}
+
+// Separar lógica de filtrado de categorías
+function filtrarCategorias(selectedProvider: Option | null, categorias: Option[], setForm: React.Dispatch<React.SetStateAction<FormData>>): Option[] {
+  if (!selectedProvider) {
+    setForm(prevForm => ({ ...prevForm, categoriaGasto: '', cuentaGastos: '' }));
+    return categorias;
+  }
+  if (selectedProvider.cuentaGastos && selectedProvider.cuentaGastos.trim() !== '') {
+    const cuentasProveedor = selectedProvider.cuentaGastos.split(',').map(cuenta => cuenta.trim());
+    const nuevasCategoriasFiltradas = categorias.filter(categoria => {
+      const match = cuentasProveedor.some(cuentaProveedor => {
+        const categoriaLabelNormalizado = normalizeText(categoria.label);
+        const cuentaProveedorNormalizada = normalizeText(cuentaProveedor);
+        return categoriaLabelNormalizado === cuentaProveedorNormalizada;
+      });
+      return match;
+    });
+    const categoriasSinDuplicados = nuevasCategoriasFiltradas.filter((categoria, index, self) =>
+      index === self.findIndex(c => c.label === categoria.label)
+    );
+    if (categoriasSinDuplicados.length === 0) {
+      setForm(prevForm => ({ ...prevForm, categoriaGasto: '', cuentaGastos: '' }));
+      return categorias;
+    } else {
+      if (categoriasSinDuplicados.length === 1) {
+        const catUnica = categoriasSinDuplicados[0];
+        setForm(prevForm => ({ ...prevForm, categoriaGasto: catUnica.value, cuentaGastos: catUnica.value }));
+      } else {
+        setForm(prevForm => ({ ...prevForm, categoriaGasto: '', cuentaGastos: '' }));
+      }
+      return categoriasSinDuplicados.map(categoria => ({ ...categoria, label: categoria.label }));
+    }
+  }
+  setForm(prevForm => ({ ...prevForm, categoriaGasto: '', cuentaGastos: '' }));
+  return categorias;
 }

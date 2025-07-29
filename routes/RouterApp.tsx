@@ -1,9 +1,8 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import ProtectedRoute from '../middleware/authMiddleware';
+import { ProtectedRoute } from '../middleware/authMiddleware';
 import App from '../src/App';
 import Admin from '../src/components/Admin';
-import LoginPage from '../pages/LoginPage';
 import SendMailTest from '../src/components/SendMailTest';
 import AdminCatalogosUpload from '../src/components/AdminCatalogosUpload';
 
@@ -11,7 +10,6 @@ import AdminCatalogosUpload from '../src/components/AdminCatalogosUpload';
 const RouterApp: React.FC = () => (
   <Router>
     <Routes>
-      <Route path="/login" element={<LoginPage />} />
       <Route path="/SendMailTest" element={
         <ProtectedRoute requiredRole="ADMIN">
           <SendMailTest />
@@ -42,7 +40,7 @@ const RouterApp: React.FC = () => (
           </ProtectedRoute>
         }
       />
-      <Route path="*" element={<Navigate to="/Solicitud" replace />} />
+      <Route path="/" element={<Navigate to="/Solicitud" replace />} />
     </Routes>
   </Router>
 );

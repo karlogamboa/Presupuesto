@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { fetchResultados } from '../services';
 
 interface ResultadosTablaProps {
   data?: any[];
@@ -44,9 +43,6 @@ const ResultadosTabla: React.FC<ResultadosTablaProps> = ({
 
   useEffect(() => {
     if (!propData) {
-      fetchResultados()
-        .then(apiData => setData(apiData || []))
-        .catch(() => {});
     } else {
       setData(propData || []);
     }
@@ -108,7 +104,7 @@ const ResultadosTabla: React.FC<ResultadosTablaProps> = ({
               <th style={{ padding: 12, fontSize: 15, letterSpacing: 1 }}>FECHA</th>
             </tr>
             <tr style={{ background: theme === 'dark' ? '#424242' : '#e3eafc', color: theme === 'dark' ? '#f3f3f3' : '#222' }}>
-              {renderHeader('Solicitante', 'solicitante')}
+              {renderHeader('Solicitante', 'nombre')}
               {renderHeader('Núm. Empleado', 'numeroEmpleado')}
               {renderHeader('Departamento', 'departamento')}
               {renderHeader('SubDepartamento', 'subDepartamento')}
@@ -131,7 +127,7 @@ const ResultadosTabla: React.FC<ResultadosTablaProps> = ({
                       transition: 'background 0.2s',
                     }}
                   >
-                    <td style={{ padding: 8, color: '#111' }}>{row.solicitante}</td>
+                    <td style={{ padding: 8, color: '#111' }}>{row.nombre}</td>
                     <td style={{ padding: 8, color: '#111' }}>{row.numeroEmpleado}</td>
                     <td style={{ padding: 8, color: '#111' }}>{row.departamento}</td>
                     <td style={{ padding: 8, color: '#111' }}>{row.subDepartamento}</td>

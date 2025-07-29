@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { fetchSolicitanteByNumeroEmpleado } from '../services';
+import { fetchUserInfo } from '../services';
 
 export interface EmpleadoParsed {
   nombre: string;
@@ -8,6 +8,8 @@ export interface EmpleadoParsed {
   subDepartamento: string;
   centroCostos: string;
   empresa: string;
+  roles?: string[] | string;
+  numeroEmpleado?: string;
 }
 
 function getCentroCostosFromSubDepartamento(subDepartamento: string) {
@@ -30,15 +32,42 @@ function getCentroCostosFromSubDepartamento(subDepartamento: string) {
 export function parseEmpleadoData(data: any): EmpleadoParsed {
   // DEBUG: Log para ver el objeto recibido
   console.log('parseEmpleadoData data:', data);
-  // Extraer nombre del solicitante (soporta variantes)
-  const nombre = data?.nombre ?? data?.Nombre ?? data?.NOMBRE ?? '';
+
+  // Extraer nombre del solicitante (soporta variantes y objeto userName)
+  let nombre = data?.nombre ?? data?.Nombre ?? data?.NOMBRE ?? '';
+  if (!nombre && typeof data?.userName === 'object' && data.userName?.givenName && data.userName?.familyName) {
+    nombre = `${data.userName.givenName} ${data.userName.familyName}`;
+  }
+
   // Extraer correo electrónico (soporta varias variantes)
-  const correo = data?.['Correo electrónico'] ?? data?.correo ?? data?.correoElectronico ?? '';
+  const correo =
+    data?.['Correo electrónico'] ??
+    data?.correo ??
+    data?.correoElectronico ??
+    data?.email ??
+    data?.email_from_token ??
+    data?.principal ??
+    '';
+
+  // Extraer roles desde authorities si existen
+  let roles: string[] | string = data?.roles ?? data?.role ?? data?.rol ?? '';
+  if (Array.isArray(data?.authorities)) {
+    roles = data.authorities.map((a: any) => a.authority);
+  }
+
+  // Extraer número de empleado
+  const numeroEmpleado =
+    data?.numeroEmpleado ??
+    data?.NumeroEmpleado ??
+    data?.numero ??
+    data?.employeeNumber ??
+    '';
+
   // Procesar departamento y subdepartamento
   let departamento = '';
   let subDepartamento = '';
   let centroCostosCalculado = '';
-  const deptStr = data?.departamento ?? '';
+  const deptStr = data?.departamento ?? data?.department ?? '';
   if (deptStr) {
     const deptParts = deptStr.split(' : ');
     if (deptParts.length > 1) {
@@ -73,38 +102,25 @@ export function parseEmpleadoData(data: any): EmpleadoParsed {
     departamento,
     subDepartamento,
     centroCostos: centroCostosCalculado,
-    empresa: data?.subsidiaria ?? data?.empresa ?? ''
+    empresa: data?.subsidiaria ?? data?.empresa ?? '',
+    roles,
+    numeroEmpleado
   };
 }
 
-export function useSolicitanteData(numeroEmpleado: string | undefined) {
+export function useSolicitanteData() {
+  // Obtiene los datos del usuario autenticado vía SAML (backend)
   const [empleado, setEmpleado] = useState<EmpleadoParsed | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
   useEffect(() => {
-    if (!numeroEmpleado) {
-      setEmpleado(null);
-      setError(null);
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    fetchSolicitanteByNumeroEmpleado(numeroEmpleado)
-      .then((data: any) => {
-        if (!data || !data.nombre) {
-          setEmpleado(null);
-          setError('No se encontró el solicitante');
-          return;
-        }
-        setEmpleado(parseEmpleadoData(data));
+    let mounted = true;
+    fetchUserInfo()
+      .then(data => {
+        if (mounted) setEmpleado(parseEmpleadoData(data));
       })
       .catch(() => {
-        setEmpleado(null);
-        setError('Error al obtener solicitante');
-      })
-      .finally(() => setLoading(false));
-  }, [numeroEmpleado]);
-
-  return { empleado, loading, error };
+        if (mounted) setEmpleado(null);
+      });
+    return () => { mounted = false; };
+  }, []);
+  return { empleado };
 }

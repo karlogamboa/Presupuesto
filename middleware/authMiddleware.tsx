@@ -1,119 +1,126 @@
 import React, { useEffect, useState } from 'react';
-import { useLocation, Navigate } from 'react-router-dom';
-import { validateToken, fetchUserInfo } from '../src/services';
+import { fetchUserInfo } from '../src/services';
+import { config, dynamicConfig } from '../src/config';
+
+// Usar siempre config/dynamicConfig para URLs. No hardcodear.
+const baseURL = dynamicConfig.LAMBDA_URL || config.API_BASE_URL;
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
   requiredRole?: string;
 }
 
-function isTokenValid(): boolean {
-  const accessToken = localStorage.getItem('access_token');
-  if (!accessToken) return false;
-  
-  try {
-    const payload = JSON.parse(atob(accessToken.split('.')[1]));
-    const now = Math.floor(Date.now() / 1000);
-    return !!payload.exp && payload.exp > now;
-  } catch {
-    return false;
-  }
-}
-
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole }) => {
-  const [auth, setAuth] = useState<boolean | null>(null);
   const [role, setRole] = useState<string | null>(null);
   const [loadingRole, setLoadingRole] = useState(true);
-  const location = useLocation();
 
   useEffect(() => {
     async function checkAuth() {
-      // Verificar token local primero
-      if (!isTokenValid()) {
-        setAuth(false);
-        setLoadingRole(false);
-        return;
-      }
-
-      // Validar con el servidor
+      console.log('[ProtectedRoute] Iniciando checkAuth');
       try {
-        const isValid = await validateToken();
-        setAuth(isValid);
-        
-        if (isValid && requiredRole) {
-          // Obtener información del usuario para verificar rol
-          const userInfo = await fetchUserInfo();
-          // Soporta roles como arreglo o string
-          let userRoles: string[] = [];
-          if (Array.isArray(userInfo?.roles)) {
-            userRoles = userInfo.roles.map((r: string) => r.trim().toLowerCase());
-          } else if (typeof userInfo?.roles === 'string') {
-            userRoles = userInfo.roles.split(',').map((r: string) => r.trim().toLowerCase());
-          } else if (userInfo?.role) {
-            userRoles = [String(userInfo.role).trim().toLowerCase()];
-          } else if (userInfo?.rol) {
-            userRoles = [String(userInfo.rol).trim().toLowerCase()];
-          }
-          setRole(userRoles.join(', '));
-          // Si el requiredRole no está en los roles, el acceso será denegado abajo
+        const userInfo = await fetchUserInfo();
+        console.log('[ProtectedRoute] userInfo:', userInfo);
+        let userRoles: string[] = [];
+        if (Array.isArray(userInfo?.roles)) {
+          userRoles = userInfo.roles.map((r: string) => r.trim().toLowerCase());
+        } else if (typeof userInfo?.roles === 'string') {
+          userRoles = userInfo.roles.split(',').map((r: string) => r.trim().toLowerCase());
+        } else if (userInfo?.role) {
+          userRoles = [String(userInfo.role).trim().toLowerCase()];
+        } else if (userInfo?.rol) {
+          userRoles = [String(userInfo.rol).trim().toLowerCase()];
         }
-      } catch {
-        setAuth(false);
+        console.log('[ProtectedRoute] userRoles:', userRoles);
+        setRole(userRoles.join(', '));
+      } catch (error: any) {
+        if (error instanceof Response) {
+          error.text().then((text: string) => {
+            console.error('[ProtectedRoute] Error en fetchUserInfo:', error.status, text);
+          });
+        } else {
+          console.error('[ProtectedRoute] Error en fetchUserInfo:', error);
+        }
+        // Manejo de error simplificado, sin la variable forbidden
       } finally {
         setLoadingRole(false);
+        console.log('[ProtectedRoute] setLoadingRole(false)');
       }
     }
-
     checkAuth();
   }, [requiredRole]);
 
-  // Mostrar loading mientras verifica autenticación
-  if (auth === null || loadingRole) {
+  if (loadingRole) {
     return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '100vh' 
-      }}>
-        <div>Verificando autenticación...</div>
-      </div>
-    );
-  }
-
-  // Redirigir a login si no está autenticado
-  if (!auth) {
-    if (location.pathname !== '/login') {
-      return <Navigate to="/login" replace />;
-    }
-    return <>{children}</>;
-  }
-
-  // Verificar rol si es requerido
-  if (requiredRole && !(role && role.split(',').map(r => r.trim().toLowerCase()).includes(requiredRole.trim().toLowerCase()))) {
-    return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
         height: '100vh',
         flexDirection: 'column',
         gap: '16px'
       }}>
+        <img src="/logo-cdc.png" alt="Logotipo CDC" style={{ width: 120, marginBottom: 16 }} />
         <div>No tienes permisos para acceder a esta sección</div>
         <div style={{ fontSize: '14px', color: '#666' }}>
-          Rol requerido: {requiredRole} | Tu rol: {role || 'Sin rol'}
+          Rol requerido: {requiredRole} | Tu rol: {role?.toUpperCase() || 'Sin rol'}
+        </div>
+        <button
+          style={{
+            marginTop: '12px',
+            padding: '8px 20px',
+            background: '#1976d2',
+            color: '#fff',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer'
+          }}
+          onClick={() => window.location.href = `${baseURL}/login`}
+        >
+          Ir a Login
+        </button>
+      </div>
+    );
+  }
+
+  if (requiredRole && !(role && role.split(',').map(r => r.trim().toLowerCase()).includes(requiredRole.trim().toLowerCase()))) {
+    return (
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        height: '100vh',
+        flexDirection: 'column',
+        gap: '16px'
+      }}>
+        <img src="/logo-cdc.png" alt="Logotipo CDC" style={{ width: 120, marginBottom: 16 }} />
+        <div>No tienes permisos para acceder a esta sección</div>
+        <div style={{ fontSize: '14px', color: '#666' }}>
+          Rol requerido: {requiredRole} | Tu rol: {role?.toUpperCase() || 'Sin rol'}
+          <br />
+          <button
+            style={{
+              marginTop: '12px',
+              padding: '8px 20px',
+              background: '#1976d2',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer'
+            }}
+            onClick={() => window.location.href = '/Solicitud'}
+          >
+            Ir a Solicitud
+          </button>
         </div>
       </div>
     );
   }
 
-  // Redirigir a la aplicación si ya está autenticado y está en login
-  if (auth && location.pathname === '/login') {
-    return <Navigate to="/Solicitud" replace />;
-  }
+  // if (location.pathname === '/login') {
+  //   return <Navigate to="/Solicitud" replace />;
+  // }
 
   return <>{children}</>;
 };
 
-export default ProtectedRoute;
+export { ProtectedRoute };

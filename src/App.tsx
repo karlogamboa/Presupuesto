@@ -9,8 +9,12 @@ import 'react-toastify/dist/ReactToastify.css';
 
 interface Resultado {
   id?: number;
-  solicitante?: string;
+  nombre?: string;
+  correo?: string;
   numeroEmpleado?: string;
+  departamento?: string;
+  subDepartamento?: string;
+  centroCostos?: string;
   estatusConfirmacion?: string;
   cecos?: string;
   periodoPresupuesto?: string;
@@ -18,7 +22,6 @@ interface Resultado {
   categoriaGasto?: string;
   cuentaGastos?: string;
   montoSubtotal?: number;
-  correo?: string;
   [key: string]: any;
 }
 
@@ -50,11 +53,11 @@ function App() {
         ...data,
         cecos: data.centroCostos,
         estatusConfirmacion: 'Pendiente',
-        montoSubtotal: parseFloat(data.montoSubtotal), // Convertir montoSubtotal a número
+        montoSubtotal: parseFloat(data.montoSubtotal),
       },
       ...prev,
     ]);
-    setSolicitanteSeleccionado(data.solicitante ?? '');
+    setSolicitanteSeleccionado(data.nombre ?? '');
   };
 
   const handleEstatusChange = (idx: number, nuevoEstatus: string) => {
@@ -65,7 +68,7 @@ function App() {
 
   const resultadosFiltrados = useMemo(() => {
     return resultados
-      .filter(r => !solicitanteSeleccionado || r.solicitante === solicitanteSeleccionado)
+      .filter(r => !solicitanteSeleccionado || r.nombre === solicitanteSeleccionado)
       .filter(r => filtroEstatus === 'Todos' || r.estatusConfirmacion === filtroEstatus);
   }, [resultados, solicitanteSeleccionado, filtroEstatus]);
 

@@ -5,8 +5,7 @@ import { toast } from 'react-toastify';
 const CATALOG_OPTIONS = [
   { value: 'proveedores', label: 'Proveedores' },
   { value: 'departamentos', label: 'Departamentos' },
-  { value: 'categorias-gasto', label: 'Categorías de Gasto' },
-  { value: 'solicitantes', label: 'Solicitantes' }
+  { value: 'categorias-gasto', label: 'Categorías de Gasto' }
 ];
 
 const AdminCatalogosUpload: React.FC = () => {
@@ -66,9 +65,13 @@ const AdminCatalogosUpload: React.FC = () => {
       const data = await importCatalogCSV(catalog, file, replaceAll);
       
       if (data.success) {
+        // En la parte donde usas data.successCount:
+        const successCount = (data as any).successCount;
         setResult({
           type: 'success',
-          message: `Importación exitosa: ${data.successCount} registros importados.`,
+          message: typeof successCount === 'number'
+            ? `Importación exitosa: ${successCount} registros importados.`
+            : 'Importación exitosa.',
           data,
         });
       } else {

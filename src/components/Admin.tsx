@@ -6,7 +6,12 @@ import 'react-toastify/dist/ReactToastify.css';
 
 interface Solicitud {
   id?: string;
+  nombre?: string;
+  correo?: string;
   numeroEmpleado?: string;
+  departamento?: string;
+  subDepartamento?: string;
+  centroCostos?: string;
   estatusConfirmacion?: string;
   montoSubtotal?: number;
   Fecha?: string;
@@ -14,7 +19,7 @@ interface Solicitud {
 }
 
 const camposFiltro = [
-  { label: 'Solicitante', value: 'solicitante' },
+  { label: 'Solicitante', value: 'nombre' },
   { label: 'Número de Empleado', value: 'numeroEmpleado' },
   { label: 'Proveedor', value: 'proveedor' },
   { label: 'Departamento', value: 'departamento' },
