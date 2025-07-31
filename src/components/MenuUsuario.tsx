@@ -29,6 +29,8 @@ const MenuUsuario: React.FC = () => {
       : user?.numeroEmpleado;
 
   const handleLogout = async () => {
+    // Borra el JWT del frontend antes de redirigir
+    localStorage.removeItem('jwt');
     // Redirige a Okta SLO si está configurado, si no al backend
     const oktaSloUrl = dynamicConfig.OKTA_SLO_URL || config.OKTA_SLO_URL;
     if (oktaSloUrl) {

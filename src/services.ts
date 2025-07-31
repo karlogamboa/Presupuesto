@@ -37,13 +37,13 @@ function getAuthHeaders(): Record<string, string> {
 // Función para obtener información del usuario autenticado desde el backend (SAML/cookie)
 // Siempre envía JWT en Authorization header
 export async function fetchUserInfo() {
-  console.log('[services] fetchUserInfo: llamando a', `${baseURL}/saml/user`);
+  console.log('[services] fetchUserInfo: llamando a', `${baseURL}/api/user`);
   console.log('[services] document.cookie:', document.cookie);
   const headers = getAuthHeaders();
   console.log('[services] fetchUserInfo: headers', headers);
   // Solo usa la cookie SAML, no envíes Authorization
   try {
-    const response = await fetch(`${baseURL}/saml/user`, {
+    const response = await fetch(`${baseURL}/api/user`, {
       credentials: 'include',
       headers
     });

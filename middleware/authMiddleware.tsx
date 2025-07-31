@@ -10,46 +10,48 @@ interface ProtectedRouteProps {
   requiredRole?: string;
 }
 
+type AuthStatus = 'loading' | 'unauthenticated' | 'unauthorized' | 'authorized';
+
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole }) => {
-  const [role, setRole] = useState<string | null>(null);
-  const [loadingRole, setLoadingRole] = useState(true);
+  const [authStatus, setAuthStatus] = useState<AuthStatus>('loading');
+  const [userRole, setUserRole] = useState<string>('Sin rol');
 
   useEffect(() => {
     async function checkAuth() {
-      console.log('[ProtectedRoute] Iniciando checkAuth');
       try {
         const userInfo = await fetchUserInfo();
-        console.log('[ProtectedRoute] userInfo:', userInfo);
-        let userRoles: string[] = [];
+        // Si no hay usuario, no está autenticado
+        if (!userInfo || Object.keys(userInfo).length === 0) {
+          setAuthStatus('unauthenticated');
+          return;
+        }
+        // Extraer roles
+        let roles: string[] = [];
         if (Array.isArray(userInfo?.roles)) {
-          userRoles = userInfo.roles.map((r: string) => r.trim().toLowerCase());
+          roles = userInfo.roles.map((r: string) => r.trim().toLowerCase());
         } else if (typeof userInfo?.roles === 'string') {
-          userRoles = userInfo.roles.split(',').map((r: string) => r.trim().toLowerCase());
+          roles = userInfo.roles.split(',').map((r: string) => r.trim().toLowerCase());
         } else if (userInfo?.role) {
-          userRoles = [String(userInfo.role).trim().toLowerCase()];
+          roles = [String(userInfo.role).trim().toLowerCase()];
         } else if (userInfo?.rol) {
-          userRoles = [String(userInfo.rol).trim().toLowerCase()];
+          roles = [String(userInfo.rol).trim().toLowerCase()];
         }
-        console.log('[ProtectedRoute] userRoles:', userRoles);
-        setRole(userRoles.join(', '));
-      } catch (error: any) {
-        if (error instanceof Response) {
-          error.text().then((text: string) => {
-            console.error('[ProtectedRoute] Error en fetchUserInfo:', error.status, text);
-          });
-        } else {
-          console.error('[ProtectedRoute] Error en fetchUserInfo:', error);
+        setUserRole(roles.length > 0 ? roles.join(', ') : 'Sin rol');
+        // Si se requiere rol y el usuario no lo tiene, no autorizado
+        if (requiredRole && !roles.includes(requiredRole.trim().toLowerCase())) {
+          setAuthStatus('unauthorized');
+          return;
         }
-        // Manejo de error simplificado, sin la variable forbidden
-      } finally {
-        setLoadingRole(false);
-        console.log('[ProtectedRoute] setLoadingRole(false)');
+        // Autorizado
+        setAuthStatus('authorized');
+      } catch (error) {
+        setAuthStatus('unauthenticated');
       }
     }
     checkAuth();
   }, [requiredRole]);
 
-  if (loadingRole) {
+  if (authStatus === 'loading') {
     return (
       <div style={{
         display: 'flex',
@@ -59,11 +61,24 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole 
         flexDirection: 'column',
         gap: '16px'
       }}>
-        <img src="/logo-cdc.png" alt="Logotipo CDC" style={{ width: 120, marginBottom: 16 }} />
-        <div>No tienes permisos para acceder a esta sección</div>
-        <div style={{ fontSize: '14px', color: '#666' }}>
-          Rol requerido: {requiredRole} | Tu rol: {role?.toUpperCase() || 'Sin rol'}
-        </div>
+        <img src="https://www.circulodecredito.com.mx/documents/10588964/0/cdc-logo-negro.svg" alt="Logotipo CDC" style={{ width: 120, marginBottom: 16 }} />
+        <div>Cargando autenticación...</div>
+      </div>
+    );
+  }
+
+  if (authStatus === 'unauthenticated') {
+    return (
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        height: '100vh',
+        flexDirection: 'column',
+        gap: '16px'
+      }}>
+        <img src="https://www.circulodecredito.com.mx/documents/10588964/0/cdc-logo-negro.svg" alt="Logotipo CDC" style={{ width: 120, marginBottom: 16 }} />
+        <div>Tu sesión ha expirado o no estás autenticado.</div>
         <button
           style={{
             marginTop: '12px',
@@ -82,7 +97,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole 
     );
   }
 
-  if (requiredRole && !(role && role.split(',').map(r => r.trim().toLowerCase()).includes(requiredRole.trim().toLowerCase()))) {
+  if (authStatus === 'unauthorized') {
     return (
       <div style={{
         display: 'flex',
@@ -92,34 +107,30 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole 
         flexDirection: 'column',
         gap: '16px'
       }}>
-        <img src="/logo-cdc.png" alt="Logotipo CDC" style={{ width: 120, marginBottom: 16 }} />
+        <img src="https://www.circulodecredito.com.mx/documents/10588964/0/cdc-logo-negro.svg" alt="Logotipo CDC" style={{ width: 120, marginBottom: 16 }} />
         <div>No tienes permisos para acceder a esta sección</div>
         <div style={{ fontSize: '14px', color: '#666' }}>
-          Rol requerido: {requiredRole} | Tu rol: {role?.toUpperCase() || 'Sin rol'}
-          <br />
-          <button
-            style={{
-              marginTop: '12px',
-              padding: '8px 20px',
-              background: '#1976d2',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer'
-            }}
-            onClick={() => window.location.href = '/Solicitud'}
-          >
-            Ir a Solicitud
-          </button>
+          Rol requerido: {requiredRole} | Tu rol: {userRole?.toUpperCase() || 'Sin rol'}
         </div>
+        <button
+          style={{
+            marginTop: '12px',
+            padding: '8px 20px',
+            background: '#1976d2',
+            color: '#fff',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer'
+          }}
+          onClick={() => window.location.href = '/Solicitud'}
+        >
+          Ir a Solicitud
+        </button>
       </div>
     );
   }
 
-  // if (location.pathname === '/login') {
-  //   return <Navigate to="/Solicitud" replace />;
-  // }
-
+  // Autorizado
   return <>{children}</>;
 };
 
