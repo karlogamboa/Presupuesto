@@ -17,10 +17,11 @@ const MenuUsuario: React.FC = () => {
       ? (user as any).authorities.map((a: any) => a.authority)
       : user?.roles;
 
+  // Detecta admin si alguna autoridad contiene "admin" (case-insensitive)
   const isAdmin =
-    roles === 'ADMIN' ||
-    (typeof roles === 'string' && roles.includes('ADMIN')) ||
-    (Array.isArray(roles) && roles.includes('Admin'));
+    Array.isArray(roles)
+      ? roles.some((r: string) => r.toLowerCase().includes('admin'))
+      : (typeof roles === 'string' && roles.toLowerCase().includes('admin'));
 
   // Extrae employeeNumber si existe (solo si existe en el objeto)
   const numeroEmpleado =
@@ -75,11 +76,7 @@ const MenuUsuario: React.FC = () => {
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
         <span style={{ fontWeight: 600 }}>
-          Usuario: {
-            (user && 'userName' in user && typeof (user as any).userName === 'object')
-              ? `${(user as any).userName.givenName} ${(user as any).userName.familyName}`
-              : (user && 'userName' in user ? (user as any).userName : user.nombre || user.correo)
-          }
+          Usuario: {user.nombre || user.correo }
         </span>
         {numeroEmpleado && (
           <span style={{ fontWeight: 500, color: '#1976d2' }}>

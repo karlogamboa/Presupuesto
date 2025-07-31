@@ -85,7 +85,17 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void }> = ({ 
 
   // Hook para inicializar datos de usuario SAML/Okta usando hook global
   useEffect(() => {
-    if (empleado) {
+    // Solo actualiza si los datos realmente cambiaron
+    if (
+      empleado &&
+      (
+        form.solicitante !== (empleado.nombre || '') ||
+        form.correo !== (empleado.correo || '') ||
+        form.departamento !== (empleado.departamento || '') ||
+        form.subDepartamento !== (empleado.subDepartamento || '') ||
+        form.centroCostos !== (empleado.centroCostos || '')
+      )
+    ) {
       setForm(prevForm => ({
         ...prevForm,
         solicitante: empleado.nombre || '',
@@ -95,7 +105,7 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void }> = ({ 
         centroCostos: empleado.centroCostos || '',
       }));
       setEmpresa(empleado.empresa || '');
-    } else {
+    } else if (!empleado) {
       setForm(f => ({
         ...f,
         solicitante: '',
@@ -296,7 +306,17 @@ const SolicitudGastoForm: React.FC<{ onSubmit: (data: FormData) => void }> = ({ 
         toast.error(data?.error || 'Error al guardar el presupuesto');
         return;
       }
-      setForm(initialForm);
+      // Resetea solo los campos de la solicitud, pero conserva los datos del usuario logueado
+      setForm(prevForm => ({
+        ...prevForm,
+        montoSubtotal: '',
+        proveedor: '',
+        periodoPresupuesto: '',
+        categoriaGasto: '',
+        cuentaGastos: '',
+        subDepartamento: '',
+        centroCostos: '', // resetear centro de costos también
+      }));
       setProveedor('');
       setProveedorInput('');
       setPeriodoPresupuesto('');

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { fetchResultados, editarEstatusSolicitud } from '../services';
 import MenuUsuario from './MenuUsuario';
 import { ToastContainer, toast } from 'react-toastify';
@@ -31,7 +31,7 @@ const camposFiltro = [
   { label: 'Fecha', value: 'fecha' }, // <-- corregido a 'fecha'
 ];
 
-const estatusOpciones = ['Pendiente', 'Confirmado', 'Rechazado'];
+const estatusOpciones = ['Pendiente', 'Aprobado', 'Rechazado'];
 
 const Admin: React.FC = () => {
   const [solicitudes, setSolicitudes] = useState<Solicitud[]>([]);
@@ -123,7 +123,7 @@ const Admin: React.FC = () => {
 
   useEffect(() => {
     setPagina(1);
-  }, [filtrosCampos, filtroEstatus, solicitudes]);
+  }, [filtrosCampos, filtroEstatus]);
 
   const handleFiltroChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -131,20 +131,28 @@ const Admin: React.FC = () => {
     else setValorFiltro(value);
   };
 
-  const handleEstatusChange = (idx: number, nuevoEstatus: string) => {
-    const solicitud = datosPagina[idx];
+  const rowRefs = useRef<Record<string, HTMLTableRowElement | null>>({});
+
+  const handleEstatusChange = (solicitudId: string | undefined, nuevoEstatus: string) => {
+    if (!solicitudId) return;
+    const solicitud = solicitudes.find(s => s.id === solicitudId);
     if (!solicitud) return;
 
     editarEstatusSolicitud(nuevoEstatus, solicitud)
       .then(response => {
         if (!response || response.success !== true) {
           toast.error(`Error en la petición: ${response?.error || response?.message || 'Error desconocido'}`);
-          // No actualizar el estado si no fue exitoso
         } else {
           const actualizadas = solicitudes.map(s =>
-            s === solicitud ? { ...s, estatusConfirmacion: nuevoEstatus } : s
+            s.id === solicitudId ? { ...s, estatusConfirmacion: nuevoEstatus } : s
           );
           setSolicitudes(actualizadas);
+          // Scroll al renglón modificado si está visible
+          setTimeout(() => {
+            if (rowRefs.current[solicitudId]) {
+              rowRefs.current[solicitudId]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+          }, 100);
         }
       })
       .catch(error => {
@@ -224,7 +232,7 @@ const Admin: React.FC = () => {
               {estatusOpciones.map(e => {
                 let bg = theme === 'dark' ? '#333' : '#ffe082', color = theme === 'dark' ? '#ffe082' : '#a15c00', shadow = 'none';
                 if (filtroEstatus === e) {
-                  if (e === 'Confirmado') { bg = '#43a047'; color = '#fff'; shadow = '0 1px 4px #43a047'; }
+                  if (e === 'Aprobado') { bg = '#43a047'; color = '#fff'; shadow = '0 1px 4px #43a047'; }
                   else if (e === 'Rechazado') { bg = '#e57373'; color = '#fff'; shadow = '0 1px 4px #e57373'; }
                   else if (e === 'Pendiente') { bg = theme === 'dark' ? '#333' : '#ffe082'; color = theme === 'dark' ? '#ffe082' : '#a15c00'; shadow = '0 1px 4px #ffe082'; }
                 }
@@ -449,8 +457,13 @@ const Admin: React.FC = () => {
                   else if (clean === 'rechazado') rowBg = theme === 'dark' ? '#4c2323' : '#ffebee';
                   else if (clean === 'pendiente') rowBg = theme === 'dark' ? '#4c4c23' : '#fffde7';
                   return (
-                    <React.Fragment key={idx + (pagina - 1) * porPagina}>
-                      <tr style={{ background: rowBg, transition: 'background 0.2s' }}>
+                    <React.Fragment key={row.id || idx + (pagina - 1) * porPagina}>
+                      <tr
+                        ref={el => {
+                          if (row.id) rowRefs.current[row.id] = el;
+                        }}
+                        style={{ background: rowBg, transition: 'background 0.2s' }}
+                      >
                         {camposFiltro.filter(c => c.value !== 'estatusConfirmacion').map(c => (
                           <td key={c.value} style={{
                             padding: 8,
@@ -479,13 +492,13 @@ const Admin: React.FC = () => {
                             padding: '8px 18px',
                             borderRadius: 16,
                             background:
-                              row.estatusConfirmacion === 'Confirmado'
+                              row.estatusConfirmacion === 'Aprobado'
                                 ? '#43a047'
                                 : row.estatusConfirmacion === 'Rechazado'
                                 ? '#e57373'
                                 : '#ffe082',
                             color:
-                              row.estatusConfirmacion === 'Confirmado'
+                              row.estatusConfirmacion === 'Aprobado'
                                 ? '#fff'
                                 : row.estatusConfirmacion === 'Rechazado'
                                 ? '#fff'
@@ -499,7 +512,7 @@ const Admin: React.FC = () => {
                             {/* Mostrar select para cambiar estatus */}
                             <select
                               value={row.estatusConfirmacion || ''}
-                              onChange={e => handleEstatusChange(idx + (pagina - 1) * porPagina, e.target.value)}
+                              onChange={e => handleEstatusChange(row.id, e.target.value)}
                               style={{
                                 position: 'absolute',
                                 left: 0,

@@ -33,12 +33,9 @@ export function parseEmpleadoData(data: any): EmpleadoParsed {
   // DEBUG: Log para ver el objeto recibido
   console.log('parseEmpleadoData data:', data);
 
-  // Extraer nombre del solicitante (soporta variantes y objeto userName)
-  let nombre = data?.nombre ?? data?.Nombre ?? data?.NOMBRE ?? '';
-  if (!nombre && typeof data?.userName === 'object' && data.userName?.givenName && data.userName?.familyName) {
-    nombre = `${data.userName.givenName} ${data.userName.familyName}`;
-  }
-
+  // Extraer nombre del solicitante usando displayName si existe
+  let nombre = data?.displayName ?? data?.nombre ?? data?.Nombre ?? data?.NOMBRE ?? '';
+  // ...existing code...
   // Extraer correo electrónico (soporta varias variantes)
   const correo =
     data?.['Correo electrónico'] ??

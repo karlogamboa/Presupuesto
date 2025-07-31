@@ -22,11 +22,11 @@ const ResultadosTabla: React.FC<ResultadosTablaProps> = ({
   const getRowBg = (estatus: string, idx: number, theme: 'dark' | 'light') => {
     const clean = (estatus || '').trim().toLowerCase();
     const colors: Record<string, string> = {
-      confirmado: theme === 'dark' ? '#2e7d32' : '#e8f5e9',
-      rechazado: theme === 'dark' ? '#c62828' : '#ffebee',
-      pendiente: theme === 'dark' ? '#f57c00' : '#fffde7',
+      aprobado: theme === 'dark' ? '#244c2c' : '#e8f5e9',
+      rechazado: theme === 'dark' ? '#4c2323' : '#ffebee',
+      pendiente: theme === 'dark' ? '#4c4c23' : '#fffde7',
     };
-    return colors[clean] || (idx % 2 === 0 ? (theme === 'dark' ? '#424242' : '#f7fafd') : (theme === 'dark' ? '#303030' : '#fff'));
+    return colors[clean] || (idx % 2 === 0 ? (theme === 'dark' ? '#232323' : '#f7fafd') : (theme === 'dark' ? '#181a1b' : '#fff'));
   };
 
   const [theme, setTheme] = useState<'dark' | 'light'>(
@@ -148,13 +148,13 @@ const ResultadosTabla: React.FC<ResultadosTablaProps> = ({
                         padding: '8px 18px',
                         borderRadius: 16,
                         background:
-                          row.estatusConfirmacion === 'Confirmado'
+                          row.estatusConfirmacion === 'Aprobado'
                             ? '#43a047'
                             : row.estatusConfirmacion === 'Rechazado'
                             ? '#e57373'
                             : '#ffe082',
                         color:
-                          row.estatusConfirmacion === 'Confirmado'
+                          row.estatusConfirmacion === 'Aprobado'
                             ? '#fff'
                             : row.estatusConfirmacion === 'Rechazado'
                             ? '#fff'
@@ -228,7 +228,12 @@ const ResultadosTabla: React.FC<ResultadosTablaProps> = ({
               </button>
             );
           })()}
-          <span style={{ alignSelf: 'center', fontWeight: 500, color: theme === 'dark' ? '#f3f3f3' : '#111' }}>
+          
+              <span style={{
+                alignSelf: 'center',
+                fontWeight: 500,
+                color: theme === 'dark' ? '#90caf9' : '#1976d2'   
+              }}>
             Página {pagina} de {totalPaginas}
           </span>
           <button

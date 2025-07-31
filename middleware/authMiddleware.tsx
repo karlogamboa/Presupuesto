@@ -27,18 +27,16 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole 
         }
         // Extraer roles
         let roles: string[] = [];
-        if (Array.isArray(userInfo?.roles)) {
-          roles = userInfo.roles.map((r: string) => r.trim().toLowerCase());
-        } else if (typeof userInfo?.roles === 'string') {
-          roles = userInfo.roles.split(',').map((r: string) => r.trim().toLowerCase());
-        } else if (userInfo?.role) {
-          roles = [String(userInfo.role).trim().toLowerCase()];
-        } else if (userInfo?.rol) {
-          roles = [String(userInfo.rol).trim().toLowerCase()];
+        let isAdmin = false;
+        if (Array.isArray(userInfo?.authorities)) {
+          roles = userInfo.authorities.map((a: any) => String(a.authority).trim());
+          isAdmin = roles.some(r => r.toLowerCase().includes('admin'));
         }
-        setUserRole(roles.length > 0 ? roles.join(', ') : 'Sin rol');
+        // Si no es admin por authorities, revisa otros campos si lo necesitas
+        // Si no tiene Admin, es User
+        setUserRole(isAdmin ? 'ADMIN' : 'USER');
         // Si se requiere rol y el usuario no lo tiene, no autorizado
-        if (requiredRole && !roles.includes(requiredRole.trim().toLowerCase())) {
+        if (requiredRole && ((requiredRole === 'ADMIN' && !isAdmin) || (requiredRole === 'USER' && isAdmin))) {
           setAuthStatus('unauthorized');
           return;
         }

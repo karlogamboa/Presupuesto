@@ -125,8 +125,22 @@ const EstatusFilter: React.FC<{ estatusUnicos: string[]; filtroEstatus: string; 
         style={{
           padding: '8px 18px',
           borderRadius: 16,
-          background: filtroEstatus === e ? '#43a047' : '#e3eafc',
-          color: filtroEstatus === e ? '#fff' : '#1976d2',
+          background:
+        filtroEstatus === e
+          ? e === 'Aprobado'
+            ? '#43a047'
+            : e === 'Rechazado'
+            ? '#e53935'
+            : e === 'Pendiente'
+            ? '#ffd600'
+            : '#1976d2'
+          : '#e3eafc',
+          color:
+        filtroEstatus === e
+          ? e === 'Pendiente'
+            ? '#333'
+            : '#fff'
+          : '#1976d2',
           fontWeight: 700,
         }}
       >

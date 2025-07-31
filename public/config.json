@@ -1,4 +1,4 @@
 {
-  "LAMBDA_URL": "https://v9hhsb7ju3.execute-api.us-east-2.amazonaws.com/qa",
-  "OKTA_SLO_URL": "https://circulodecredito.oktapreview.com/login/signout"
+  "LAMBDA_URL": "https://vercgnv962.execute-api.us-east-2.amazonaws.com/qa",
+  "OKTA_SLO_URL": "https://trial-4567848.okta.com/login/signout"
 }
