@@ -355,6 +355,22 @@ export async function importCatalogCSV(catalog: string, file: File, replaceAll: 
   }
 }
 
+export async function fetchPresupuesto({ centroCostos, cuentaGastos, periodo }: { centroCostos: string; cuentaGastos: string; periodo: string }) {
+  const url = `${baseURL}/api/presupuesto?centroCostos=${encodeURIComponent(centroCostos)}&cuentaGastos=${encodeURIComponent(cuentaGastos)}&periodo=${encodeURIComponent(periodo)}`;
+  const res = await fetch(url, {
+    credentials: 'include',
+    headers: getAuthHeaders()
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    console.error('Error al obtener presupuesto:', res.status, text);
+    throw new Error(`Error al obtener presupuesto: ${res.status} ${text}`);
+  }
+  const text = await res.text();
+  if (!text) return {};
+  return JSON.parse(text);
+}
+
 // --- CORS: Asegúrate que el backend/API Gateway reenvía los headers CORS en todas las respuestas /api/* ---
 // Verifica en DevTools que los headers Access-Control-Allow-Origin, etc. están presentes.
 

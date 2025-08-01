@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
-import { fetchResultados, editarEstatusSolicitud } from '../services';
+import { fetchResultados, editarEstatusSolicitud, fetchPresupuesto, sendEmail } from '../services';
 import MenuUsuario from './MenuUsuario';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import * as XLSX from 'xlsx'; // npm install xlsx
 
 interface Solicitud {
   id?: string;
@@ -31,7 +32,7 @@ const camposFiltro = [
   { label: 'Fecha', value: 'fecha' }, // <-- corregido a 'fecha'
 ];
 
-const estatusOpciones = ['Pendiente', 'Aprobado', 'Rechazado'];
+const estatusOpciones = ['Pendiente', 'Aprobado', 'Rechazado', 'Netsuite']; // Agrega Netsuite
 
 const Admin: React.FC = () => {
   const [solicitudes, setSolicitudes] = useState<Solicitud[]>([]);
@@ -161,6 +162,111 @@ const Admin: React.FC = () => {
       });
   };
 
+  const handleDownloadExcel = async () => {
+    // Filtra aprobadas
+    const aprobadas = solicitudes.filter(s => s.estatusConfirmacion === 'Aprobado');
+    if (aprobadas.length === 0) {
+      toast.info('No hay solicitudes aprobadas para exportar.');
+      return;
+    }
+    // Genera datos para Excel
+    const rows: any[] = [];
+    for (const s of aprobadas) {
+      // Extrae mes de periodoPresupuesto (ej: "Enero 2025" => 1)
+      let periodo = '';
+      let periodoTexto = '';
+      if (s.periodoPresupuesto) {
+        const meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+        const mesIdx = meses.findIndex(m => s.periodoPresupuesto.toLowerCase().includes(m));
+        periodo = mesIdx >= 0 ? (mesIdx + 1).toString() : '';
+        periodoTexto = s.periodoPresupuesto;
+      }
+      // Fetch presupuesto por solicitud
+      let presupuesto = '';
+      try {
+        const resp = await fetchPresupuesto({
+          centroCostos: s.centroCostos ?? '',
+          cuentaGastos: s.cuentaGastos ?? '',
+          periodo: periodoTexto
+        });
+        presupuesto = resp?.presupuesto ?? '';
+      } catch {
+        presupuesto = '';
+      }
+      rows.push({
+        'Presupuesto': presupuesto,
+        'Cuenta de Gastos': s.cuentaGastos ?? '',
+        'Departamento': s.centroCostos ?? '',
+        'Periodo': periodo,
+        'Monto': s.montoSubtotal ?? '',
+      });
+    }
+    // Crea Excel
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Solicitudes Aprobadas');
+    XLSX.writeFile(wb, 'solicitudes_aprobadas.xlsx');
+
+    // Actualiza estatus a Netsuite
+    const usuario = localStorage.getItem('usuario') || 'descarga_admin';
+    const fechaNetsuite = new Date().toISOString();
+    const actualizadas = solicitudes.map(s =>
+      s.estatusConfirmacion === 'Aprobado'
+        ? {
+            ...s,
+            estatusConfirmacion: 'Netsuite',
+            fechaActualizacion: fechaNetsuite,
+            fechaNetsuite,
+            usuarioNetsuite: usuario
+          }
+        : s
+    );
+    setSolicitudes(actualizadas);
+
+    // Actualiza en backend
+    for (const s of aprobadas) {
+      await editarEstatusSolicitud('Netsuite', {
+        ...s,
+        fechaActualizacion: fechaNetsuite,
+        fechaNetsuite,
+        usuarioNetsuite: usuario
+      });
+    }
+
+    // Agrupa solicitudes por solicitante
+    const solicitudesPorSolicitante: Record<string, Solicitud[]> = {};
+    aprobadas.forEach(s => {
+      const nombre = s.nombre || 'Sin nombre';
+      if (!solicitudesPorSolicitante[nombre]) solicitudesPorSolicitante[nombre] = [];
+      solicitudesPorSolicitante[nombre].push(s);
+    });
+
+    // Envía un correo por solicitante (si tiene varias solicitudes, las lista)
+    let correoErrores = 0;
+    for (const [nombre, solicitudesSolicitante] of Object.entries(solicitudesPorSolicitante)) {
+      const listaSolicitudes = solicitudesSolicitante.map(s =>
+        `ID: ${s.id ?? ''}, Monto: ${s.montoSubtotal ?? ''}, CeCo: ${s.centroCostos ?? ''}, Periodo: ${s.periodoPresupuesto ?? ''}`
+      ).join('\n');
+      try {
+        await sendEmail({
+          to: 'Karlo+netsuit@zicral.com',
+          subject: `Descarga Netsuite - Solicitante: ${nombre}`,
+          body:
+            `Se han descargado y cambiado a Netsuite las siguientes solicitudes del solicitante "${nombre}" por el usuario: ${usuario} el ${new Date().toLocaleString('es-MX')}:\n\n${listaSolicitudes}`
+        });
+      } catch {
+        correoErrores++;
+      }
+    }
+    if (correoErrores === 0) {
+      toast.success('Correos de prueba enviados a Karlo+netsuit@zicral.com');
+    } else {
+      toast.error(`No se pudo enviar ${correoErrores} correo(s) de prueba.`);
+    }
+
+    toast.success('Excel descargado y solicitudes actualizadas a Netsuite.');
+  };
+
   // Detectar tema (light/dark) desde el body
   const [theme, setTheme] = useState<'dark' | 'light'>(
     typeof window !== 'undefined' && document.body.classList.contains('dark') ? 'dark' : 'light'
@@ -235,6 +341,7 @@ const Admin: React.FC = () => {
                   if (e === 'Aprobado') { bg = '#43a047'; color = '#fff'; shadow = '0 1px 4px #43a047'; }
                   else if (e === 'Rechazado') { bg = '#e57373'; color = '#fff'; shadow = '0 1px 4px #e57373'; }
                   else if (e === 'Pendiente') { bg = theme === 'dark' ? '#333' : '#ffe082'; color = theme === 'dark' ? '#ffe082' : '#a15c00'; shadow = '0 1px 4px #ffe082'; }
+                  else if (e === 'Netsuite') { bg = '#2e3b55'; color = '#fff'; shadow = '0 1px 4px #2e3b55'; }
                 }
                 return (
                   <button
@@ -429,6 +536,26 @@ const Admin: React.FC = () => {
               </div>
             </div>
           )}
+          {/* Botón para descargar Excel de aprobadas */}
+          <div style={{ textAlign: 'right', margin: '24px 0' }}>
+            <button
+              type="button"
+              onClick={handleDownloadExcel}
+              style={{
+                padding: '10px 24px',
+                borderRadius: 8,
+                background: '#43a047',
+                color: '#fff',
+                fontWeight: 700,
+                fontSize: 16,
+                border: 'none',
+                cursor: 'pointer',
+                boxShadow: '0 1px 4px #43a047'
+              }}
+            >
+              Descargar Excel Aprobadas
+            </button>
+          </div>
           <div>
             <table style={{
               width: '100%',
@@ -453,7 +580,8 @@ const Admin: React.FC = () => {
                   let rowBg = idx % 2 === 0
                     ? (theme === 'dark' ? '#232323' : '#f7fafd')
                     : (theme === 'dark' ? '#181a1b' : '#fff');
-                  if (clean === 'confirmado') rowBg = theme === 'dark' ? '#244c2c' : '#e8f5e9';
+                  if (clean === 'netsuite') rowBg = theme === 'dark' ? '#2e3b55' : '#e3eafc'; // Color especial Netsuite
+                  else if (clean === 'aprobado') rowBg = theme === 'dark' ? '#244c2c' : '#e8f5e9';
                   else if (clean === 'rechazado') rowBg = theme === 'dark' ? '#4c2323' : '#ffebee';
                   else if (clean === 'pendiente') rowBg = theme === 'dark' ? '#4c4c23' : '#fffde7';
                   return (
@@ -496,11 +624,15 @@ const Admin: React.FC = () => {
                                 ? '#43a047'
                                 : row.estatusConfirmacion === 'Rechazado'
                                 ? '#e57373'
+                                : row.estatusConfirmacion === 'Netsuite'
+                                ? '#2e3b55'
                                 : '#ffe082',
                             color:
                               row.estatusConfirmacion === 'Aprobado'
                                 ? '#fff'
                                 : row.estatusConfirmacion === 'Rechazado'
+                                ? '#fff'
+                                : row.estatusConfirmacion === 'Netsuite'
                                 ? '#fff'
                                 : '#a15c00',
                             fontWeight: 700,
@@ -509,24 +641,26 @@ const Admin: React.FC = () => {
                             boxShadow: '0 1px 4px #0002',
                             position: 'relative'
                           }}>
-                            {/* Mostrar select para cambiar estatus */}
-                            <select
-                              value={row.estatusConfirmacion || ''}
-                              onChange={e => handleEstatusChange(row.id, e.target.value)}
-                              style={{
-                                position: 'absolute',
-                                left: 0,
-                                top: 0,
-                                width: '100%',
-                                height: '100%',
-                                opacity: 0,
-                                cursor: 'pointer'
-                              }}
-                            >
-                              {estatusOpciones.map(opt => (
-                                <option key={opt} value={opt}>{opt}</option>
-                              ))}
-                            </select>
+                            {/* Mostrar select para cambiar estatus, solo si no es Netsuite */}
+                            {row.estatusConfirmacion !== 'Netsuite' ? (
+                              <select
+                                value={row.estatusConfirmacion || ''}
+                                onChange={e => handleEstatusChange(row.id, e.target.value)}
+                                style={{
+                                  position: 'absolute',
+                                  left: 0,
+                                  top: 0,
+                                  width: '100%',
+                                  height: '100%',
+                                  opacity: 0,
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                {estatusOpciones.map(opt => (
+                                  <option key={opt} value={opt}>{opt}</option>
+                                ))}
+                              </select>
+                            ) : null}
                             <span style={{ pointerEvents: 'none' }}>
                               {row.estatusConfirmacion}
                             </span>
